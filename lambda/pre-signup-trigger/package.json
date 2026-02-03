@@ -1,0 +1,14 @@
+{
+  "name": "pre-signup-trigger",
+  "version": "1.0.0",
+  "description": "Cognito Pre Sign-Up Lambda trigger for email domain validation",
+  "main": "index.js",
+  "scripts": {
+    "test": "jest",
+    "test:coverage": "jest --coverage"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "jest": "^29.0.0"
+  }
+}
