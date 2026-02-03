@@ -1,0 +1,14 @@
+{
+  "name": "dynamodb-scripts",
+  "version": "1.0.0",
+  "description": "DynamoDB testing and data scripts",
+  "scripts": {
+    "insert-data": "node insert-sample-data.js",
+    "test-patterns": "node test-access-patterns.js",
+    "test-conditional": "node test-conditional-writes.js"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.400.0",
+    "@aws-sdk/lib-dynamodb": "^3.400.0"
+  }
+}
