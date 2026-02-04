@@ -16,10 +16,12 @@ module "dynamodb" {
 module "cognito" {
   source = "./modules/cognito"
 
-  user_pool_name       = "${local.name_prefix}-users"
+  user_pool_name        = "${local.name_prefix}-users"
   allowed_email_domains = var.allowed_email_domains
-  project_name         = var.project_name
-  environment          = var.environment
+  project_name          = var.project_name
+  environment           = var.environment
+  callback_urls         = var.cognito_callback_urls
+  logout_urls           = var.cognito_logout_urls
   
   pre_signup_lambda_arn = module.lambda.pre_signup_lambda_arn
 }
@@ -36,6 +38,7 @@ module "lambda" {
   dynamodb_table_arn    = module.dynamodb.table_arn
   eventbridge_bus_name  = module.eventbridge.event_bus_name
   eventbridge_bus_arn   = module.eventbridge.event_bus_arn
+  sender_email          = var.ses_sender_email
   project_name          = var.project_name
   environment           = var.environment
 }
@@ -72,4 +75,17 @@ module "ses" {
   sender_email = var.ses_sender_email
   project_name = var.project_name
   environment  = var.environment
+}
+
+# CloudWatch Alarms
+module "cloudwatch_alarms" {
+  source = "./modules/cloudwatch-alarms"
+
+  name_prefix = local.name_prefix
+  api_name    = "${local.name_prefix}-api"
+  lambda_function_names = [
+    module.lambda.pre_signup_lambda_name,
+    module.lambda.task_api_lambda_name,
+    module.lambda.notification_handler_lambda_name
+  ]
 }

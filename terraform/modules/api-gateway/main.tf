@@ -7,6 +7,29 @@ resource "aws_api_gateway_rest_api" "main" {
   }
 }
 
+# CORS configuration
+resource "aws_api_gateway_gateway_response" "cors_4xx" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  response_type = "DEFAULT_4XX"
+
+  response_parameters = {
+    "gatewayresponse.header.Access-Control-Allow-Origin"  = "'*'"
+    "gatewayresponse.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "gatewayresponse.header.Access-Control-Allow-Methods" = "'GET,POST,PUT,DELETE,OPTIONS'"
+  }
+}
+
+resource "aws_api_gateway_gateway_response" "cors_5xx" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  response_type = "DEFAULT_5XX"
+
+  response_parameters = {
+    "gatewayresponse.header.Access-Control-Allow-Origin"  = "'*'"
+    "gatewayresponse.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "gatewayresponse.header.Access-Control-Allow-Methods" = "'GET,POST,PUT,DELETE,OPTIONS'"
+  }
+}
+
 resource "aws_api_gateway_authorizer" "cognito" {
   name          = "cognito-authorizer"
   rest_api_id   = aws_api_gateway_rest_api.main.id
@@ -18,6 +41,51 @@ resource "aws_api_gateway_resource" "tasks" {
   rest_api_id = aws_api_gateway_rest_api.main.id
   parent_id   = aws_api_gateway_rest_api.main.root_resource_id
   path_part   = "tasks"
+}
+
+# OPTIONS method for CORS on /tasks
+resource "aws_api_gateway_method" "tasks_options" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.tasks.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "tasks_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks.id
+  http_method = aws_api_gateway_method.tasks_options.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "tasks_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks.id
+  http_method = aws_api_gateway_method.tasks_options.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "tasks_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks.id
+  http_method = aws_api_gateway_method.tasks_options.http_method
+  status_code = aws_api_gateway_method_response.tasks_options.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,PUT,DELETE,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
 }
 
 resource "aws_api_gateway_method" "tasks_proxy" {
@@ -43,6 +111,51 @@ resource "aws_api_gateway_resource" "tasks_id" {
   path_part   = "{taskId}"
 }
 
+# OPTIONS method for CORS on /tasks/{taskId}
+resource "aws_api_gateway_method" "tasks_id_options" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.tasks_id.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "tasks_id_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id.id
+  http_method = aws_api_gateway_method.tasks_id_options.http_method
+  type        = "MOCK"
+
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "tasks_id_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id.id
+  http_method = aws_api_gateway_method.tasks_id_options.http_method
+  status_code = "200"
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "tasks_id_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id.id
+  http_method = aws_api_gateway_method.tasks_id_options.http_method
+  status_code = aws_api_gateway_method_response.tasks_id_options.status_code
+
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,POST,PUT,DELETE,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
 resource "aws_api_gateway_method" "tasks_id_proxy" {
   rest_api_id   = aws_api_gateway_rest_api.main.id
   resource_id   = aws_api_gateway_resource.tasks_id.id
@@ -65,11 +178,24 @@ resource "aws_api_gateway_deployment" "main" {
 
   depends_on = [
     aws_api_gateway_integration.tasks_proxy,
-    aws_api_gateway_integration.tasks_id_proxy
+    aws_api_gateway_integration.tasks_id_proxy,
+    aws_api_gateway_integration.tasks_options,
+    aws_api_gateway_integration.tasks_id_options
   ]
 
   lifecycle {
     create_before_destroy = true
+  }
+
+  triggers = {
+    redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.tasks.id,
+      aws_api_gateway_resource.tasks_id.id,
+      aws_api_gateway_method.tasks_proxy.id,
+      aws_api_gateway_method.tasks_id_proxy.id,
+      aws_api_gateway_integration.tasks_proxy.id,
+      aws_api_gateway_integration.tasks_id_proxy.id,
+    ]))
   }
 }
 

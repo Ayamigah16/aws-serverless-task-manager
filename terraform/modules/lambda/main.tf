@@ -1,3 +1,11 @@
+# Lambda Layer for shared code
+resource "aws_lambda_layer_version" "shared" {
+  filename            = "${path.module}/../../../lambda/layers/shared-layer.zip"
+  layer_name          = "${var.name_prefix}-shared-layer"
+  compatible_runtimes = [var.runtime]
+  description         = "Shared utilities for Lambda functions"
+}
+
 # Pre Sign-Up Lambda
 resource "aws_iam_role" "pre_signup" {
   name = "${var.name_prefix}-pre-signup-role"
@@ -106,11 +114,12 @@ resource "aws_lambda_function" "task_api" {
   runtime       = var.runtime
   timeout       = var.timeout
   memory_size   = var.memory_size
+  layers        = [aws_lambda_layer_version.shared.arn]
 
   environment {
     variables = {
-      TABLE_NAME       = var.dynamodb_table_name
-      EVENT_BUS_NAME   = var.eventbridge_bus_name
+      TABLE_NAME     = var.dynamodb_table_name
+      EVENT_BUS_NAME = var.eventbridge_bus_name
     }
   }
 
@@ -186,10 +195,12 @@ resource "aws_lambda_function" "notification_handler" {
   runtime       = var.runtime
   timeout       = var.timeout
   memory_size   = var.memory_size
+  layers        = [aws_lambda_layer_version.shared.arn]
 
   environment {
     variables = {
-      TABLE_NAME = var.dynamodb_table_name
+      TABLE_NAME   = var.dynamodb_table_name
+      SENDER_EMAIL = var.sender_email
     }
   }
 

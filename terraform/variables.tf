@@ -79,3 +79,15 @@ variable "api_throttle_burst_limit" {
   type        = number
   default     = 2000
 }
+
+variable "cognito_callback_urls" {
+  description = "Cognito OAuth callback URLs"
+  type        = list(string)
+  default     = ["http://localhost:3000", "https://localhost:3000"]
+}
+
+variable "cognito_logout_urls" {
+  description = "Cognito OAuth logout URLs"
+  type        = list(string)
+  default     = ["http://localhost:3000", "https://localhost:3000"]
+}
