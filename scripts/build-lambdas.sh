@@ -57,19 +57,28 @@ build_lambda() {
     # Remove old package
     rm -f function.zip
     
-    # Create package based on function type
-    if [[ "${function_name}" == "pre-signup-trigger" ]]; then
-        # Simple function without shared dependencies
-        zip -q function.zip index.js package.json || error_exit "Failed to package ${function_name}"
-    else
-        # Functions with shared dependencies
-        mkdir -p shared
-        cp ../shared/*.js shared/ 2>/dev/null || true
-        zip -qr function.zip index.js package.json shared/ || error_exit "Failed to package ${function_name}"
-        rm -rf shared
-    fi
+    # Package function (all functions now use Lambda layer for shared code)
+    zip -q function.zip index.js package.json || error_exit "Failed to package ${function_name}"
     
     log_success "${function_name} built successfully"
+}
+
+# Build Lambda layer
+build_layer() {
+    log_info "Building Lambda layer..."
+    
+    local layer_dir="${LAMBDA_DIR}/layers/shared-layer"
+    check_directory "${layer_dir}"
+    
+    cd "${layer_dir}" || error_exit "Failed to cd to ${layer_dir}"
+    
+    # Remove old package
+    rm -f ../shared-layer.zip
+    
+    # Package layer
+    zip -qr ../shared-layer.zip nodejs/ || error_exit "Failed to package layer"
+    
+    log_success "Lambda layer built successfully"
 }
 
 # Main function
@@ -79,6 +88,9 @@ main() {
     
     # Check lambda directory exists
     check_directory "${LAMBDA_DIR}"
+    
+    # Build Lambda layer first
+    build_layer
     
     # Build each Lambda function
     build_lambda "pre-signup-trigger"
@@ -91,6 +103,7 @@ main() {
     echo "========================================"
     echo ""
     log_info "Deployment packages created:"
+    echo "  - ${LAMBDA_DIR}/layers/shared-layer.zip"
     echo "  - ${LAMBDA_DIR}/pre-signup-trigger/function.zip"
     echo "  - ${LAMBDA_DIR}/task-api/function.zip"
     echo "  - ${LAMBDA_DIR}/notification-handler/function.zip"
