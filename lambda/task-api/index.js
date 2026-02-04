@@ -1,7 +1,7 @@
-const { validateRequest, isAdmin, getUserId } = require('./shared/auth');
-const { getItem, putItem, updateItem, query, deleteItem } = require('./shared/dynamodb');
-const { publishEvent } = require('./shared/eventbridge');
-const { success, error, unauthorized, forbidden, notFound, badRequest, conflict } = require('./shared/response');
+const { validateRequest, isAdmin, getUserId } = require('/opt/nodejs/auth');
+const { getItem, putItem, updateItem, query, deleteItem } = require('/opt/nodejs/dynamodb');
+const { publishEvent } = require('/opt/nodejs/eventbridge');
+const { success, error, unauthorized, forbidden, notFound, badRequest, conflict } = require('/opt/nodejs/response');
 const { v4: uuidv4 } = require('uuid');
 
 exports.handler = async (event) => {

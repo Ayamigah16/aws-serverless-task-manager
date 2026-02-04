@@ -1,4 +1,4 @@
-const { getItem, query } = require('./shared/dynamodb');
+const { getItem, query } = require('/opt/nodejs/dynamodb');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
 
 const sesClient = new SESClient({});
