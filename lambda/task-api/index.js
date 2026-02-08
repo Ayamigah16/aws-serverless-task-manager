@@ -17,7 +17,9 @@ exports.handler = async (event) => {
     const pathParams = event.pathParameters || {};
 
     // Route requests
-    if (method === 'POST' && path === '/tasks') {
+    if (method === 'GET' && path === '/users') {
+      return await listUsers(userIsAdmin);
+    } else if (method === 'POST' && path === '/tasks') {
       return await createTask(event, userId, userIsAdmin);
     } else if (method === 'GET' && path === '/tasks') {
       return await listTasks(userId, userIsAdmin);
@@ -311,4 +313,51 @@ async function deleteTask(taskId, userIsAdmin) {
   await deleteItem(`TASK#${taskId}`, 'METADATA');
 
   return success({ message: 'Task deleted successfully' });
+}
+
+async function listUsers(userIsAdmin) {
+  if (!userIsAdmin) {
+    return forbidden('Only admins can list users');
+  }
+
+  const { CognitoIdentityProviderClient, ListUsersCommand, AdminListGroupsForUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+  const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION_NAME });
+  
+  try {
+    const listCommand = new ListUsersCommand({
+      UserPoolId: process.env.USER_POOL_ID,
+      Limit: 60
+    });
+    
+    const response = await cognito.send(listCommand);
+    
+    const users = await Promise.all(response.Users.map(async (user) => {
+      const groupsCommand = new AdminListGroupsForUserCommand({
+        UserPoolId: process.env.USER_POOL_ID,
+        Username: user.Username
+      });
+      
+      const groupsResponse = await cognito.send(groupsCommand);
+      const groups = groupsResponse.Groups.map(g => g.GroupName);
+      
+      const attributes = {};
+      user.Attributes.forEach(attr => {
+        attributes[attr.Name] = attr.Value;
+      });
+      
+      return {
+        userId: attributes.sub,
+        email: attributes.email,
+        groups: groups,
+        isAdmin: groups.includes('Admins')
+      };
+    }));
+    
+    const activeUsers = users.filter(u => !groups || !groups.includes('Admins'));
+    
+    return success({ users: activeUsers });
+  } catch (err) {
+    console.error('Error listing users:', err);
+    return error('Failed to list users');
+  }
 }

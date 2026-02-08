@@ -27,7 +27,11 @@ function App() {
         <Routes>
           <Route path="/login" element={
             <Authenticator>
-              {({ signOut, user }) => <Navigate to="/" />}
+              {({ signOut, user }) => {
+                // Trigger auth context update after login
+                window.location.href = '/';
+                return null;
+              }}
             </Authenticator>
           } />
           <Route path="/" element={

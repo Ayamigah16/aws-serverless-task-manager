@@ -54,11 +54,21 @@ build_lambda() {
     
     cd "${function_dir}" || error_exit "Failed to cd to ${function_dir}"
     
+    # Install dependencies if package.json exists
+    if [[ -f package.json ]]; then
+        log_info "Installing dependencies for ${function_name}..."
+        npm install --production --silent || error_exit "Failed to install dependencies for ${function_name}"
+    fi
+    
     # Remove old package
     rm -f function.zip
     
-    # Package function (all functions now use Lambda layer for shared code)
-    zip -q function.zip index.js package.json || error_exit "Failed to package ${function_name}"
+    # Package function with node_modules
+    if [[ -d node_modules ]]; then
+        zip -qr function.zip index.js package.json node_modules/ || error_exit "Failed to package ${function_name}"
+    else
+        zip -q function.zip index.js package.json || error_exit "Failed to package ${function_name}"
+    fi
     
     log_success "${function_name} built successfully"
 }
@@ -72,11 +82,31 @@ build_layer() {
     
     cd "${layer_dir}" || error_exit "Failed to cd to ${layer_dir}"
     
+    # Install dependencies
+    if [[ -f package.json ]]; then
+        log_info "Installing layer dependencies..."
+        npm install --production --silent || error_exit "Failed to install layer dependencies"
+    fi
+    
+    # Create nodejs directory structure for Lambda layer
+    mkdir -p nodejs
+    
+    # Copy node_modules
+    if [[ -d node_modules ]]; then
+        cp -r node_modules nodejs/ || error_exit "Failed to copy node_modules"
+    fi
+    
+    # Copy shared utilities
+    cp *.js nodejs/ 2>/dev/null || true
+    
     # Remove old package
     rm -f ../shared-layer.zip
     
     # Package layer
     zip -qr ../shared-layer.zip nodejs/ || error_exit "Failed to package layer"
+    
+    # Cleanup
+    rm -rf nodejs
     
     log_success "Lambda layer built successfully"
 }
@@ -96,6 +126,7 @@ main() {
     build_lambda "pre-signup-trigger"
     build_lambda "task-api"
     build_lambda "notification-handler"
+    build_lambda "users-api"
     
     echo ""
     echo "========================================"
@@ -107,6 +138,7 @@ main() {
     echo "  - ${LAMBDA_DIR}/pre-signup-trigger/function.zip"
     echo "  - ${LAMBDA_DIR}/task-api/function.zip"
     echo "  - ${LAMBDA_DIR}/notification-handler/function.zip"
+    echo "  - ${LAMBDA_DIR}/users-api/function.zip"
     echo ""
 }
 

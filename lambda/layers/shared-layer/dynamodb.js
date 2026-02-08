@@ -7,29 +7,30 @@ const docClient = DynamoDBDocumentClient.from(client);
 const TABLE_NAME = process.env.TABLE_NAME;
 
 async function getItem(pk, sk) {
-  const params = {
+  const command = new GetCommand({
     TableName: TABLE_NAME,
     Key: { PK: pk, SK: sk }
-  };
-
-  const result = await docClient.send(new GetCommand(params));
-  return result.Item;
+  });
+  const response = await docClient.send(command);
+  return response.Item;
 }
 
-async function putItem(item, conditionExpression = null) {
+async function putItem(item, conditionExpression) {
   const params = {
     TableName: TABLE_NAME,
     Item: item
   };
-
+  
   if (conditionExpression) {
     params.ConditionExpression = conditionExpression;
   }
-
-  await docClient.send(new PutCommand(params));
+  
+  const command = new PutCommand(params);
+  await docClient.send(command);
+  return item;
 }
 
-async function updateItem(pk, sk, updateExpression, expressionAttributeValues, expressionAttributeNames = null) {
+async function updateItem(pk, sk, updateExpression, expressionAttributeValues, expressionAttributeNames) {
   const params = {
     TableName: TABLE_NAME,
     Key: { PK: pk, SK: sk },
@@ -37,28 +38,31 @@ async function updateItem(pk, sk, updateExpression, expressionAttributeValues, e
     ExpressionAttributeValues: expressionAttributeValues,
     ReturnValues: 'ALL_NEW'
   };
-
+  
   if (expressionAttributeNames) {
     params.ExpressionAttributeNames = expressionAttributeNames;
   }
-
-  const result = await docClient.send(new UpdateCommand(params));
-  return result.Attributes;
+  
+  const command = new UpdateCommand(params);
+  const response = await docClient.send(command);
+  return response.Attributes;
 }
 
 async function query(params) {
-  params.TableName = TABLE_NAME;
-  const result = await docClient.send(new QueryCommand(params));
-  return result.Items || [];
+  const command = new QueryCommand({
+    TableName: TABLE_NAME,
+    ...params
+  });
+  const response = await docClient.send(command);
+  return response.Items || [];
 }
 
 async function deleteItem(pk, sk) {
-  const params = {
+  const command = new DeleteCommand({
     TableName: TABLE_NAME,
     Key: { PK: pk, SK: sk }
-  };
-
-  await docClient.send(new DeleteCommand(params));
+  });
+  await docClient.send(command);
 }
 
 module.exports = {

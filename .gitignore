@@ -1,0 +1,78 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+.terraform/
+.terraform.lock.hcl
+crash.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Lambda
+lambda/**/*.zip
+lambda/**/node_modules/
+lambda/**/__pycache__/
+lambda/**/*.pyc
+lambda/**/.pytest_cache/
+lambda/**/venv/
+lambda/**/.venv/
+
+# Frontend
+frontend/node_modules/
+frontend/build/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/.env.*.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Logs
+*.log
+logs/
+
+# AWS
+.aws-sam/
+samconfig.toml
+
+# Testing
+coverage/
+.nyc_output/
+*.cover
+.coverage
+htmlcov/
+
+# Misc
+*.bak
+*.tmp
+.cache/
+
+
+TODO.md
+SECURITY.md
+
+*/node_modules/*
+*/.cache/*
+*/.parcel-cache/*
+*/.next/*
+*/out/*
+*/.nuxt/*

@@ -33,5 +33,9 @@ export const taskService = {
 
   async deleteTask(taskId) {
     return await API.del(API_NAME, `/tasks/${taskId}`);
+  },
+
+  async getUsers() {
+    return await API.get(API_NAME, '/users');
   }
 };

@@ -1,3 +1,5 @@
+import { Auth } from 'aws-amplify';
+
 const awsConfig = {
   Auth: {
     region: process.env.REACT_APP_REGION || 'eu-west-1',
@@ -16,7 +18,18 @@ const awsConfig = {
       {
         name: 'TaskAPI',
         endpoint: process.env.REACT_APP_API_URL,
-        region: process.env.REACT_APP_REGION || 'eu-west-1'
+        region: process.env.REACT_APP_REGION || 'eu-west-1',
+        custom_header: async () => {
+          try {
+            const session = await Auth.currentSession();
+            return {
+              Authorization: `Bearer ${session.getIdToken().getJwtToken()}`
+            };
+          } catch (error) {
+            console.error('Error getting auth token:', error);
+            return {};
+          }
+        }
       }
     ]
   }

@@ -48,6 +48,16 @@ variable "environment" {
   type        = string
 }
 
+variable "cognito_user_pool_id" {
+  description = "Cognito User Pool ID"
+  type        = string
+}
+
+variable "aws_region" {
+  description = "AWS Region"
+  type        = string
+}
+
 variable "sender_email" {
   description = "SES sender email address"
   type        = string

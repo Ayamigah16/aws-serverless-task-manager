@@ -5,12 +5,17 @@ import { useAuth } from '../contexts/AuthContext';
 const TaskList = () => {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
+  const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [assigningTask, setAssigningTask] = useState(null);
 
   useEffect(() => {
     loadTasks();
-  }, []);
+    if (user?.isAdmin) {
+      loadUsers();
+    }
+  }, [user]);
 
   const loadTasks = async () => {
     try {
@@ -21,6 +26,15 @@ const TaskList = () => {
       setError(err.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadUsers = async () => {
+    try {
+      const response = await taskService.getUsers();
+      setUsers(response.users || []);
+    } catch (err) {
+      console.error('Error loading users:', err);
     }
   };
 
@@ -40,6 +54,25 @@ const TaskList = () => {
       loadTasks();
     } catch (err) {
       alert('Error closing task: ' + err.message);
+    }
+  };
+
+  const handleAssignTask = async (taskId) => {
+    setAssigningTask(taskId);
+  };
+
+  const confirmAssignment = async (taskId, userId) => {
+    if (!userId) {
+      setAssigningTask(null);
+      return;
+    }
+    try {
+      await taskService.assignTask(taskId, userId);
+      alert('Task assigned successfully!');
+      setAssigningTask(null);
+      loadTasks();
+    } catch (err) {
+      alert('Error assigning task: ' + err.message);
     }
   };
 
@@ -76,13 +109,46 @@ const TaskList = () => {
                       <option value="COMPLETED">Completed</option>
                     </select>
                     {user?.isAdmin && (
-                      <button 
-                        onClick={() => handleCloseTask(task.TaskId)}
-                        className="btn btn-danger"
-                        style={{ padding: '4px 12px', fontSize: '12px' }}
-                      >
-                        Close Task
-                      </button>
+                      <>
+                        {assigningTask === task.TaskId ? (
+                          <>
+                            <select 
+                              onChange={(e) => confirmAssignment(task.TaskId, e.target.value)}
+                              style={{ padding: '4px 8px', fontSize: '12px' }}
+                              defaultValue=""
+                            >
+                              <option value="">Select user...</option>
+                              {users.map(u => (
+                                <option key={u.userId} value={u.userId}>
+                                  {u.email} {u.isAdmin ? '(Admin)' : ''}
+                                </option>
+                              ))}
+                            </select>
+                            <button 
+                              onClick={() => setAssigningTask(null)}
+                              className="btn"
+                              style={{ padding: '4px 12px', fontSize: '12px' }}
+                            >
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button 
+                            onClick={() => handleAssignTask(task.TaskId)}
+                            className="btn btn-primary"
+                            style={{ padding: '4px 12px', fontSize: '12px' }}
+                          >
+                            Assign
+                          </button>
+                        )}
+                        <button 
+                          onClick={() => handleCloseTask(task.TaskId)}
+                          className="btn btn-danger"
+                          style={{ padding: '4px 12px', fontSize: '12px' }}
+                        >
+                          Close Task
+                        </button>
+                      </>
                     )}
                   </>
                 )}

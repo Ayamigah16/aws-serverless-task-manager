@@ -33,6 +33,7 @@ export const AuthProvider = ({ children }) => {
     try {
       await Auth.signOut();
       setUser(null);
+      window.location.href = '/login';
     } catch (error) {
       console.error('Error signing out:', error);
     }

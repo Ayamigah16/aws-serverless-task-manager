@@ -4,6 +4,7 @@ resource "aws_lambda_layer_version" "shared" {
   layer_name          = "${var.name_prefix}-shared-layer"
   compatible_runtimes = [var.runtime]
   description         = "Shared utilities for Lambda functions"
+  source_code_hash    = filebase64sha256("${path.module}/../../../lambda/layers/shared-layer.zip")
 }
 
 # Pre Sign-Up Lambda
@@ -28,13 +29,14 @@ resource "aws_iam_role_policy_attachment" "pre_signup_basic" {
 }
 
 resource "aws_lambda_function" "pre_signup" {
-  filename      = "${path.module}/../../../lambda/pre-signup-trigger/function.zip"
-  function_name = "${var.name_prefix}-pre-signup"
-  role          = aws_iam_role.pre_signup.arn
-  handler       = "index.handler"
-  runtime       = var.runtime
-  timeout       = var.timeout
-  memory_size   = var.memory_size
+  filename         = "${path.module}/../../../lambda/pre-signup-trigger/function.zip"
+  function_name    = "${var.name_prefix}-pre-signup"
+  role             = aws_iam_role.pre_signup.arn
+  handler          = "index.handler"
+  runtime          = var.runtime
+  timeout          = var.timeout
+  memory_size      = var.memory_size
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/pre-signup-trigger/function.zip")
 
   environment {
     variables = {
@@ -92,6 +94,14 @@ resource "aws_iam_role_policy" "task_api" {
       {
         Effect = "Allow"
         Action = [
+          "cognito-idp:ListUsers",
+          "cognito-idp:AdminListGroupsForUser"
+        ]
+        Resource = "arn:aws:cognito-idp:${var.aws_region}:*:userpool/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "xray:PutTraceSegments",
           "xray:PutTelemetryRecords"
         ]
@@ -107,19 +117,22 @@ resource "aws_iam_role_policy_attachment" "task_api_basic" {
 }
 
 resource "aws_lambda_function" "task_api" {
-  filename      = "${path.module}/../../../lambda/task-api/function.zip"
-  function_name = "${var.name_prefix}-task-api"
-  role          = aws_iam_role.task_api.arn
-  handler       = "index.handler"
-  runtime       = var.runtime
-  timeout       = var.timeout
-  memory_size   = var.memory_size
-  layers        = [aws_lambda_layer_version.shared.arn]
+  filename         = "${path.module}/../../../lambda/task-api/function.zip"
+  function_name    = "${var.name_prefix}-task-api"
+  role             = aws_iam_role.task_api.arn
+  handler          = "index.handler"
+  runtime          = var.runtime
+  timeout          = var.timeout
+  memory_size      = var.memory_size
+  layers           = [aws_lambda_layer_version.shared.arn]
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/task-api/function.zip")
 
   environment {
     variables = {
-      TABLE_NAME     = var.dynamodb_table_name
-      EVENT_BUS_NAME = var.eventbridge_bus_name
+      TABLE_NAME      = var.dynamodb_table_name
+      EVENT_BUS_NAME  = var.eventbridge_bus_name
+      USER_POOL_ID    = var.cognito_user_pool_id
+      AWS_REGION_NAME = var.aws_region
     }
   }
 
@@ -188,14 +201,15 @@ resource "aws_iam_role_policy_attachment" "notification_handler_basic" {
 }
 
 resource "aws_lambda_function" "notification_handler" {
-  filename      = "${path.module}/../../../lambda/notification-handler/function.zip"
-  function_name = "${var.name_prefix}-notification-handler"
-  role          = aws_iam_role.notification_handler.arn
-  handler       = "index.handler"
-  runtime       = var.runtime
-  timeout       = var.timeout
-  memory_size   = var.memory_size
-  layers        = [aws_lambda_layer_version.shared.arn]
+  filename         = "${path.module}/../../../lambda/notification-handler/function.zip"
+  function_name    = "${var.name_prefix}-notification-handler"
+  role             = aws_iam_role.notification_handler.arn
+  handler          = "index.handler"
+  runtime          = var.runtime
+  timeout          = var.timeout
+  memory_size      = var.memory_size
+  layers           = [aws_lambda_layer_version.shared.arn]
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/notification-handler/function.zip")
 
   environment {
     variables = {

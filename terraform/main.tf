@@ -41,6 +41,8 @@ module "lambda" {
   sender_email          = var.ses_sender_email
   project_name          = var.project_name
   environment           = var.environment
+  cognito_user_pool_id  = module.cognito.user_pool_id
+  aws_region            = var.aws_region
 }
 
 # API Gateway
