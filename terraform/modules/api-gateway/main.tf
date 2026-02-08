@@ -37,6 +37,70 @@ resource "aws_api_gateway_authorizer" "cognito" {
   provider_arns = [var.cognito_user_pool_arn]
 }
 
+resource "aws_api_gateway_resource" "users" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_rest_api.main.root_resource_id
+  path_part   = "users"
+}
+
+resource "aws_api_gateway_method" "users_options" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.users.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "users_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.users_options.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "users_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.users_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "users_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.users.id
+  http_method = aws_api_gateway_method.users_options.http_method
+  status_code = aws_api_gateway_method_response.users_options.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'GET,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+resource "aws_api_gateway_method" "users_get" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.users.id
+  http_method   = "GET"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+}
+
+resource "aws_api_gateway_integration" "users_get" {
+  rest_api_id             = aws_api_gateway_rest_api.main.id
+  resource_id             = aws_api_gateway_resource.users.id
+  http_method             = aws_api_gateway_method.users_get.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${var.task_lambda_arn}/invocations"
+}
+
 resource "aws_api_gateway_resource" "tasks" {
   rest_api_id = aws_api_gateway_rest_api.main.id
   parent_id   = aws_api_gateway_rest_api.main.root_resource_id
@@ -111,6 +175,198 @@ resource "aws_api_gateway_resource" "tasks_id" {
   path_part   = "{taskId}"
 }
 
+resource "aws_api_gateway_resource" "tasks_id_assign" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_resource.tasks_id.id
+  path_part   = "assign"
+}
+
+resource "aws_api_gateway_method" "tasks_id_assign_options" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.tasks_id_assign.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "tasks_id_assign_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id_assign.id
+  http_method = aws_api_gateway_method.tasks_id_assign_options.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "tasks_id_assign_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id_assign.id
+  http_method = aws_api_gateway_method.tasks_id_assign_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "tasks_id_assign_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id_assign.id
+  http_method = aws_api_gateway_method.tasks_id_assign_options.http_method
+  status_code = aws_api_gateway_method_response.tasks_id_assign_options.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+resource "aws_api_gateway_method" "tasks_id_assign_proxy" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.tasks_id_assign.id
+  http_method   = "ANY"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+}
+
+resource "aws_api_gateway_integration" "tasks_id_assign_proxy" {
+  rest_api_id             = aws_api_gateway_rest_api.main.id
+  resource_id             = aws_api_gateway_resource.tasks_id_assign.id
+  http_method             = aws_api_gateway_method.tasks_id_assign_proxy.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${var.task_lambda_arn}/invocations"
+}
+
+resource "aws_api_gateway_resource" "tasks_id_status" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_resource.tasks_id.id
+  path_part   = "status"
+}
+
+resource "aws_api_gateway_method" "tasks_id_status_options" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.tasks_id_status.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "tasks_id_status_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id_status.id
+  http_method = aws_api_gateway_method.tasks_id_status_options.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "tasks_id_status_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id_status.id
+  http_method = aws_api_gateway_method.tasks_id_status_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "tasks_id_status_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id_status.id
+  http_method = aws_api_gateway_method.tasks_id_status_options.http_method
+  status_code = aws_api_gateway_method_response.tasks_id_status_options.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'PUT,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+resource "aws_api_gateway_method" "tasks_id_status_proxy" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.tasks_id_status.id
+  http_method   = "ANY"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+}
+
+resource "aws_api_gateway_integration" "tasks_id_status_proxy" {
+  rest_api_id             = aws_api_gateway_rest_api.main.id
+  resource_id             = aws_api_gateway_resource.tasks_id_status.id
+  http_method             = aws_api_gateway_method.tasks_id_status_proxy.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${var.task_lambda_arn}/invocations"
+}
+
+resource "aws_api_gateway_resource" "tasks_id_close" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  parent_id   = aws_api_gateway_resource.tasks_id.id
+  path_part   = "close"
+}
+
+resource "aws_api_gateway_method" "tasks_id_close_options" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.tasks_id_close.id
+  http_method   = "OPTIONS"
+  authorization = "NONE"
+}
+
+resource "aws_api_gateway_integration" "tasks_id_close_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id_close.id
+  http_method = aws_api_gateway_method.tasks_id_close_options.http_method
+  type        = "MOCK"
+  request_templates = {
+    "application/json" = "{\"statusCode\": 200}"
+  }
+}
+
+resource "aws_api_gateway_method_response" "tasks_id_close_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id_close.id
+  http_method = aws_api_gateway_method.tasks_id_close_options.http_method
+  status_code = "200"
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = true
+    "method.response.header.Access-Control-Allow-Methods" = true
+    "method.response.header.Access-Control-Allow-Origin"  = true
+  }
+}
+
+resource "aws_api_gateway_integration_response" "tasks_id_close_options" {
+  rest_api_id = aws_api_gateway_rest_api.main.id
+  resource_id = aws_api_gateway_resource.tasks_id_close.id
+  http_method = aws_api_gateway_method.tasks_id_close_options.http_method
+  status_code = aws_api_gateway_method_response.tasks_id_close_options.status_code
+  response_parameters = {
+    "method.response.header.Access-Control-Allow-Headers" = "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+    "method.response.header.Access-Control-Allow-Methods" = "'POST,OPTIONS'"
+    "method.response.header.Access-Control-Allow-Origin"  = "'*'"
+  }
+}
+
+resource "aws_api_gateway_method" "tasks_id_close_proxy" {
+  rest_api_id   = aws_api_gateway_rest_api.main.id
+  resource_id   = aws_api_gateway_resource.tasks_id_close.id
+  http_method   = "ANY"
+  authorization = "COGNITO_USER_POOLS"
+  authorizer_id = aws_api_gateway_authorizer.cognito.id
+}
+
+resource "aws_api_gateway_integration" "tasks_id_close_proxy" {
+  rest_api_id             = aws_api_gateway_rest_api.main.id
+  resource_id             = aws_api_gateway_resource.tasks_id_close.id
+  http_method             = aws_api_gateway_method.tasks_id_close_proxy.http_method
+  integration_http_method = "POST"
+  type                    = "AWS_PROXY"
+  uri                     = "arn:aws:apigateway:${data.aws_region.current.name}:lambda:path/2015-03-31/functions/${var.task_lambda_arn}/invocations"
+}
+
 # OPTIONS method for CORS on /tasks/{taskId}
 resource "aws_api_gateway_method" "tasks_id_options" {
   rest_api_id   = aws_api_gateway_rest_api.main.id
@@ -177,10 +433,18 @@ resource "aws_api_gateway_deployment" "main" {
   rest_api_id = aws_api_gateway_rest_api.main.id
 
   depends_on = [
+    aws_api_gateway_integration.users_get,
+    aws_api_gateway_integration.users_options,
     aws_api_gateway_integration.tasks_proxy,
     aws_api_gateway_integration.tasks_id_proxy,
+    aws_api_gateway_integration.tasks_id_assign_proxy,
+    aws_api_gateway_integration.tasks_id_status_proxy,
+    aws_api_gateway_integration.tasks_id_close_proxy,
     aws_api_gateway_integration.tasks_options,
-    aws_api_gateway_integration.tasks_id_options
+    aws_api_gateway_integration.tasks_id_options,
+    aws_api_gateway_integration.tasks_id_assign_options,
+    aws_api_gateway_integration.tasks_id_status_options,
+    aws_api_gateway_integration.tasks_id_close_options
   ]
 
   lifecycle {
@@ -189,12 +453,24 @@ resource "aws_api_gateway_deployment" "main" {
 
   triggers = {
     redeployment = sha1(jsonencode([
+      aws_api_gateway_resource.users.id,
       aws_api_gateway_resource.tasks.id,
       aws_api_gateway_resource.tasks_id.id,
+      aws_api_gateway_resource.tasks_id_assign.id,
+      aws_api_gateway_resource.tasks_id_status.id,
+      aws_api_gateway_resource.tasks_id_close.id,
+      aws_api_gateway_method.users_get.id,
       aws_api_gateway_method.tasks_proxy.id,
       aws_api_gateway_method.tasks_id_proxy.id,
+      aws_api_gateway_method.tasks_id_assign_proxy.id,
+      aws_api_gateway_method.tasks_id_status_proxy.id,
+      aws_api_gateway_method.tasks_id_close_proxy.id,
+      aws_api_gateway_integration.users_get.id,
       aws_api_gateway_integration.tasks_proxy.id,
       aws_api_gateway_integration.tasks_id_proxy.id,
+      aws_api_gateway_integration.tasks_id_assign_proxy.id,
+      aws_api_gateway_integration.tasks_id_status_proxy.id,
+      aws_api_gateway_integration.tasks_id_close_proxy.id,
     ]))
   }
 }
