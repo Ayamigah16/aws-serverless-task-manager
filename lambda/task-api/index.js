@@ -91,23 +91,29 @@ async function createTask(event, userId, userIsAdmin) {
 }
 
 async function listTasks(userId, userIsAdmin) {
-  let tasks;
-
   if (userIsAdmin) {
-    tasks = await query({
+    const tasks = await query({
       KeyConditionExpression: 'GSI2PK = :status',
       ExpressionAttributeValues: { ':status': 'STATUS#OPEN' },
       IndexName: 'GSI2'
     });
+    return success({ tasks, count: tasks.length });
   } else {
-    tasks = await query({
+    const assignments = await query({
       KeyConditionExpression: 'GSI1PK = :userId',
       ExpressionAttributeValues: { ':userId': `USER#${userId}` },
       IndexName: 'GSI1'
     });
+    
+    const tasks = await Promise.all(
+      assignments.map(async (assignment) => {
+        const task = await getItem(`TASK#${assignment.TaskId}`, 'METADATA');
+        return task;
+      })
+    );
+    
+    return success({ tasks: tasks.filter(t => t), count: tasks.length });
   }
-
-  return success({ tasks, count: tasks.length });
 }
 
 async function getTask(taskId, userId, userIsAdmin) {
@@ -183,11 +189,6 @@ async function assignTask(taskId, event, userId, userIsAdmin) {
   const task = await getItem(`TASK#${taskId}`, 'METADATA');
   if (!task) {
     return notFound('Task not found');
-  }
-
-  const user = await getItem(`USER#${assignedTo}`, 'PROFILE');
-  if (!user || user.UserStatus === 'DEACTIVATED') {
-    return badRequest('User not found or deactivated');
   }
 
   try {
@@ -353,9 +354,7 @@ async function listUsers(userIsAdmin) {
       };
     }));
     
-    const activeUsers = users.filter(u => !groups || !groups.includes('Admins'));
-    
-    return success({ users: activeUsers });
+    return success({ users });
   } catch (err) {
     console.error('Error listing users:', err);
     return error('Failed to list users');

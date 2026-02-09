@@ -22,7 +22,7 @@ const Dashboard = () => {
     }
   };
 
-  if (loading) return <div className="container"><div className="loading">Loading...</div></div>;
+  if (loading) return <div className="container"><div className="loading"><div className="spinner"></div>Loading...</div></div>;
   if (error) return <div className="container"><div className="error">{error}</div></div>;
 
   const openTasks = tasks.filter(t => t.Status === 'OPEN').length;
@@ -31,23 +31,23 @@ const Dashboard = () => {
 
   return (
     <div className="container">
-      <h2>Dashboard</h2>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '20px', marginTop: '20px' }}>
-        <div className="card">
-          <h3>Open Tasks</h3>
-          <p style={{ fontSize: '32px', fontWeight: 'bold', color: '#007bff' }}>{openTasks}</p>
+      <h2 style={{ color: '#1E293B', marginBottom: '24px', fontSize: '28px', fontWeight: 700 }}>Dashboard</h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '16px', marginBottom: '40px' }}>
+        <div className="card metric-card-open">
+          <div className="metric-label">Open Tasks</div>
+          <div className="metric-value">{openTasks}</div>
         </div>
-        <div className="card">
-          <h3>In Progress</h3>
-          <p style={{ fontSize: '32px', fontWeight: 'bold', color: '#ffc107' }}>{inProgressTasks}</p>
+        <div className="card metric-card-progress">
+          <div className="metric-label">In Progress</div>
+          <div className="metric-value">{inProgressTasks}</div>
         </div>
-        <div className="card">
-          <h3>Completed</h3>
-          <p style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>{completedTasks}</p>
+        <div className="card metric-card-completed">
+          <div className="metric-label">Completed</div>
+          <div className="metric-value">{completedTasks}</div>
         </div>
-        <div className="card">
-          <h3>Total Tasks</h3>
-          <p style={{ fontSize: '32px', fontWeight: 'bold' }}>{tasks.length}</p>
+        <div className="card metric-card-total">
+          <div className="metric-label">Total Tasks</div>
+          <div className="metric-value">{tasks.length}</div>
         </div>
       </div>
     </div>

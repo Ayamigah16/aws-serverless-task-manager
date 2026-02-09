@@ -9,6 +9,7 @@ const TaskList = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [assigningTask, setAssigningTask] = useState(null);
+  const [selectedUser, setSelectedUser] = useState('');
 
   useEffect(() => {
     loadTasks();
@@ -57,26 +58,29 @@ const TaskList = () => {
     }
   };
 
-  const handleAssignTask = async (taskId) => {
+  const handleAssignTask = (taskId) => {
     setAssigningTask(taskId);
+    setSelectedUser('');
   };
 
-  const confirmAssignment = async (taskId, userId) => {
-    if (!userId) {
-      setAssigningTask(null);
-      return;
-    }
+  const confirmAssignment = async (taskId) => {
+    if (!selectedUser) return;
     try {
-      await taskService.assignTask(taskId, userId);
-      alert('Task assigned successfully!');
+      await taskService.assignTask(taskId, selectedUser);
       setAssigningTask(null);
+      setSelectedUser('');
       loadTasks();
     } catch (err) {
-      alert('Error assigning task: ' + err.message);
+      alert('Error: ' + err.message);
     }
   };
 
-  if (loading) return <div className="container"><div className="loading">Loading...</div></div>;
+  const cancelAssignment = () => {
+    setAssigningTask(null);
+    setSelectedUser('');
+  };
+
+  if (loading) return <div className="container"><div className="loading"><div className="spinner"></div>Loading...</div></div>;
   if (error) return <div className="container"><div className="error">{error}</div></div>;
 
   return (
@@ -87,72 +91,81 @@ const TaskList = () => {
           <p>No tasks found.</p>
         ) : (
           tasks.map(task => (
-            <div key={task.TaskId} className={`task-item ${task.Priority?.toLowerCase()}`}>
-              <h3>{task.Title}</h3>
-              <p>{task.Description}</p>
-              <div style={{ marginTop: '10px', display: 'flex', gap: '10px', alignItems: 'center' }}>
-                <span style={{ padding: '4px 8px', background: '#f0f0f0', borderRadius: '4px', fontSize: '12px' }}>
-                  {task.Status}
-                </span>
-                <span style={{ padding: '4px 8px', background: '#f0f0f0', borderRadius: '4px', fontSize: '12px' }}>
-                  {task.Priority}
-                </span>
-                {task.Status !== 'CLOSED' && (
-                  <>
-                    <select 
-                      value={task.Status} 
-                      onChange={(e) => handleStatusUpdate(task.TaskId, e.target.value)}
-                      style={{ padding: '4px 8px', fontSize: '12px' }}
-                    >
-                      <option value="OPEN">Open</option>
-                      <option value="IN_PROGRESS">In Progress</option>
-                      <option value="COMPLETED">Completed</option>
-                    </select>
-                    {user?.isAdmin && (
-                      <>
-                        {assigningTask === task.TaskId ? (
-                          <>
-                            <select 
-                              onChange={(e) => confirmAssignment(task.TaskId, e.target.value)}
-                              style={{ padding: '4px 8px', fontSize: '12px' }}
-                              defaultValue=""
-                            >
-                              <option value="">Select user...</option>
-                              {users.map(u => (
-                                <option key={u.userId} value={u.userId}>
-                                  {u.email} {u.isAdmin ? '(Admin)' : ''}
-                                </option>
-                              ))}
-                            </select>
-                            <button 
-                              onClick={() => setAssigningTask(null)}
-                              className="btn"
-                              style={{ padding: '4px 12px', fontSize: '12px' }}
-                            >
-                              Cancel
-                            </button>
-                          </>
-                        ) : (
+            <div key={task.TaskId} className="task-item">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: '10px' }}>
+                <div style={{ flex: 1 }}>
+                  <h3 style={{ marginBottom: '8px' }}>{task.Title}</h3>
+                  <p style={{ color: '#666', marginBottom: '12px' }}>{task.Description}</p>
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                    <span className={`badge badge-${task.Status?.toLowerCase() || 'open'}`}>{task.Status?.replace('_', ' ') || 'Open'}</span>
+                    <span className={`badge badge-priority-${task.Priority?.toLowerCase() || 'medium'}`}>{task.Priority || 'Medium'}</span>
+                  </div>
+                </div>
+              </div>
+              
+              {task.Status !== 'CLOSED' && (
+                <div style={{ marginTop: '15px', paddingTop: '15px', borderTop: '1px solid #eee' }}>
+                  {assigningTask === task.TaskId ? (
+                    <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+                      <select 
+                        value={selectedUser}
+                        onChange={(e) => setSelectedUser(e.target.value)}
+                        style={{ flex: '1', minWidth: '200px', padding: '8px', border: '1px solid #ddd', borderRadius: '4px' }}
+                      >
+                        <option value="">Select user...</option>
+                        {users.map(u => (
+                          <option key={u.userId} value={u.userId}>
+                            {u.email} {u.isAdmin ? '(Admin)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <button 
+                        onClick={() => confirmAssignment(task.TaskId)}
+                        disabled={!selectedUser}
+                        className="btn btn-success"
+                        style={{ padding: '8px 16px' }}
+                      >
+                        Confirm
+                      </button>
+                      <button 
+                        onClick={cancelAssignment}
+                        className="btn btn-secondary"
+                        style={{ padding: '8px 16px' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                      <select 
+                        value={task.Status} 
+                        onChange={(e) => handleStatusUpdate(task.TaskId, e.target.value)}
+                        className="select-status"
+                      >
+                        <option value="OPEN">Open</option>
+                        <option value="IN_PROGRESS">In Progress</option>
+                        <option value="COMPLETED">Completed</option>
+                      </select>
+                      {user?.isAdmin && (
+                        <>
                           <button 
                             onClick={() => handleAssignTask(task.TaskId)}
                             className="btn btn-primary"
-                            style={{ padding: '4px 12px', fontSize: '12px' }}
                           >
-                            Assign
+                            Assign User
                           </button>
-                        )}
-                        <button 
-                          onClick={() => handleCloseTask(task.TaskId)}
-                          className="btn btn-danger"
-                          style={{ padding: '4px 12px', fontSize: '12px' }}
-                        >
-                          Close Task
-                        </button>
-                      </>
-                    )}
-                  </>
-                )}
-              </div>
+                          <button 
+                            onClick={() => handleCloseTask(task.TaskId)}
+                            className="btn btn-danger"
+                          >
+                            Close
+                          </button>
+                        </>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           ))
         )}

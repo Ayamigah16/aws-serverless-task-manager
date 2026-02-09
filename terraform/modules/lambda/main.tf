@@ -185,6 +185,11 @@ resource "aws_iam_role_policy" "notification_handler" {
       },
       {
         Effect = "Allow"
+        Action = "cognito-idp:AdminGetUser"
+        Resource = "arn:aws:cognito-idp:${var.aws_region}:*:userpool/*"
+      },
+      {
+        Effect = "Allow"
         Action = [
           "xray:PutTraceSegments",
           "xray:PutTelemetryRecords"
@@ -213,8 +218,10 @@ resource "aws_lambda_function" "notification_handler" {
 
   environment {
     variables = {
-      TABLE_NAME   = var.dynamodb_table_name
-      SENDER_EMAIL = var.sender_email
+      TABLE_NAME      = var.dynamodb_table_name
+      SENDER_EMAIL    = var.sender_email
+      USER_POOL_ID    = var.cognito_user_pool_id
+      AWS_REGION_NAME = var.aws_region
     }
   }
 

@@ -1,8 +1,11 @@
 const { getItem, query } = require('/opt/nodejs/dynamodb');
 const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 
 const sesClient = new SESClient({});
-const SENDER_EMAIL = process.env.SENDER_EMAIL || 'noreply@amalitech.com';
+const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION_NAME });
+const SENDER_EMAIL = process.env.SENDER_EMAIL;
+const USER_POOL_ID = process.env.USER_POOL_ID;
 
 exports.handler = async (event) => {
   console.log('Event:', JSON.stringify(event, null, 2));
@@ -37,20 +40,19 @@ exports.handler = async (event) => {
 async function handleTaskAssigned(detail) {
   const { taskId, taskTitle, assignedTo, assignedBy, priority } = detail;
 
-  const user = await getItem(`USER#${assignedTo}`, 'PROFILE');
-  
-  if (!user || user.UserStatus === 'DEACTIVATED') {
-    console.log(`User ${assignedTo} is deactivated or not found, skipping notification`);
+  const userEmail = await getUserEmail(assignedTo);
+  if (!userEmail) {
+    console.log(`User ${assignedTo} not found, skipping notification`);
     return;
   }
 
-  const admin = await getItem(`USER#${assignedBy}`, 'PROFILE');
-  const adminName = admin?.Email || 'Admin';
+  const adminEmail = await getUserEmail(assignedBy);
+  const adminName = adminEmail || 'Admin';
 
   await sendEmail(
-    user.Email,
+    userEmail,
     `New Task Assigned: ${taskTitle}`,
-    `Hi ${user.Email},\n\nYou have been assigned a new task:\n\nTask: ${taskTitle}\nPriority: ${priority}\nAssigned by: ${adminName}\n\nPlease log in to view details and update the status.\n\nBest regards,\nTask Management System`
+    `Hi,\n\nYou have been assigned a new task:\n\nTask: ${taskTitle}\nPriority: ${priority}\nAssigned by: ${adminName}\n\nPlease log in to view details and update the status.\n\nBest regards,\nTask Management System`
   );
 }
 
@@ -75,21 +77,21 @@ async function handleTaskStatusUpdated(detail) {
     recipients.add(assignment.UserId);
   }
 
-  const updater = await getItem(`USER#${updatedBy}`, 'PROFILE');
-  const updaterName = updater?.Email || 'User';
+  const updaterEmail = await getUserEmail(updatedBy);
+  const updaterName = updaterEmail || 'User';
 
   for (const userId of recipients) {
-    const user = await getItem(`USER#${userId}`, 'PROFILE');
+    const userEmail = await getUserEmail(userId);
     
-    if (!user || user.UserStatus === 'DEACTIVATED') {
-      console.log(`User ${userId} is deactivated or not found, skipping notification`);
+    if (!userEmail) {
+      console.log(`User ${userId} not found, skipping notification`);
       continue;
     }
 
     await sendEmail(
-      user.Email,
+      userEmail,
       `Task Status Updated: ${taskTitle}`,
-      `Hi ${user.Email},\n\nTask status has been updated:\n\nTask: ${taskTitle}\nPrevious Status: ${previousStatus}\nNew Status: ${newStatus}\nUpdated by: ${updaterName}\n\nLog in to view full details.\n\nBest regards,\nTask Management System`
+      `Hi,\n\nTask status has been updated:\n\nTask: ${taskTitle}\nPrevious Status: ${previousStatus}\nNew Status: ${newStatus}\nUpdated by: ${updaterName}\n\nLog in to view full details.\n\nBest regards,\nTask Management System`
     );
   }
 }
@@ -105,22 +107,38 @@ async function handleTaskClosed(detail) {
     }
   });
 
-  const admin = await getItem(`USER#${closedBy}`, 'PROFILE');
-  const adminName = admin?.Email || 'Admin';
+  const adminEmail = await getUserEmail(closedBy);
+  const adminName = adminEmail || 'Admin';
 
   for (const assignment of assignments) {
-    const user = await getItem(`USER#${assignment.UserId}`, 'PROFILE');
+    const userEmail = await getUserEmail(assignment.UserId);
     
-    if (!user || user.UserStatus === 'DEACTIVATED') {
-      console.log(`User ${assignment.UserId} is deactivated, skipping notification`);
+    if (!userEmail) {
+      console.log(`User ${assignment.UserId} not found, skipping notification`);
       continue;
     }
 
     await sendEmail(
-      user.Email,
+      userEmail,
       `Task Closed: ${taskTitle}`,
-      `Hi ${user.Email},\n\nA task you were assigned to has been closed:\n\nTask: ${taskTitle}\nFinal Status: ${finalStatus}\nClosed by: ${adminName}\n\nThank you for your contribution.\n\nBest regards,\nTask Management System`
+      `Hi,\n\nA task you were assigned to has been closed:\n\nTask: ${taskTitle}\nFinal Status: ${finalStatus}\nClosed by: ${adminName}\n\nThank you for your contribution.\n\nBest regards,\nTask Management System`
     );
+  }
+}
+
+async function getUserEmail(userId) {
+  try {
+    const command = new AdminGetUserCommand({
+      UserPoolId: USER_POOL_ID,
+      Username: userId
+    });
+    
+    const response = await cognitoClient.send(command);
+    const emailAttr = response.UserAttributes.find(attr => attr.Name === 'email');
+    return emailAttr?.Value;
+  } catch (error) {
+    console.error(`Error fetching user ${userId}:`, error);
+    return null;
   }
 }
 
