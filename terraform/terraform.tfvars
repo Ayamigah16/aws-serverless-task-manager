@@ -8,8 +8,8 @@ owner        = "devops-team"
 cost_center  = "engineering"
 
 # IMPORTANT: Set these values before deployment
-admin_email      = "admin@amalitech.com"
-ses_sender_email = "noreply@amalitech.com"
+admin_email         = "admin@amalitech.com"
+notification_emails = ["admin@amalitech.com"]  # Optional: Admins who receive all notifications. Members auto-subscribe on signup.
 
 # Email Domain Restrictions
 allowed_email_domains = ["amalitech.com", "amalitechtraining.org"]
@@ -25,3 +25,7 @@ api_throttle_burst_limit = 2000
 lambda_runtime     = "nodejs18.x"
 lambda_timeout     = 30
 lambda_memory_size = 256
+
+# Cognito Configuration
+cognito_callback_urls = ["http://localhost:3000", "https://main.dieb2ukn8mt87.amplifyapp.com"]
+cognito_logout_urls   = ["http://localhost:3000", "https://main.dieb2ukn8mt87.amplifyapp.com"]

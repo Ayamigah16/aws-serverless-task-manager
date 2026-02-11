@@ -1,10 +1,15 @@
-const { getItem, query } = require('/opt/nodejs/dynamodb');
-const { SESClient, SendEmailCommand } = require('@aws-sdk/client-ses');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, QueryCommand } = require('@aws-sdk/lib-dynamodb');
+const { SNSClient, PublishCommand } = require('@aws-sdk/client-sns');
 const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
 
-const sesClient = new SESClient({});
+const client = new DynamoDBClient({});
+const ddb = DynamoDBDocumentClient.from(client);
+const snsClient = new SNSClient({});
 const cognitoClient = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION_NAME });
-const SENDER_EMAIL = process.env.SENDER_EMAIL;
+
+const TABLE_NAME = process.env.TABLE_NAME;
+const SNS_TOPIC_ARN = process.env.SNS_TOPIC_ARN;
 const USER_POOL_ID = process.env.USER_POOL_ID;
 
 exports.handler = async (event) => {
@@ -49,32 +54,29 @@ async function handleTaskAssigned(detail) {
   const adminEmail = await getUserEmail(assignedBy);
   const adminName = adminEmail || 'Admin';
 
-  await sendEmail(
+  await sendNotification(
     userEmail,
     `New Task Assigned: ${taskTitle}`,
-    `Hi,\n\nYou have been assigned a new task:\n\nTask: ${taskTitle}\nPriority: ${priority}\nAssigned by: ${adminName}\n\nPlease log in to view details and update the status.\n\nBest regards,\nTask Management System`
+    `You have been assigned a new task:\n\nTask: ${taskTitle}\nPriority: ${priority}\nAssigned by: ${adminName}`
   );
 }
 
 async function handleTaskStatusUpdated(detail) {
   const { taskId, taskTitle, previousStatus, newStatus, updatedBy } = detail;
 
-  const assignments = await query({
-    KeyConditionExpression: 'PK = :taskId AND begins_with(SK, :assignment)',
-    ExpressionAttributeValues: {
-      ':taskId': `TASK#${taskId}`,
-      ':assignment': 'ASSIGNMENT#'
-    }
-  });
+  const assignments = await getAssignments(taskId);
 
-  const task = await getItem(`TASK#${taskId}`, 'METADATA');
-  const adminUserId = task?.CreatedBy;
+  const task = await ddb.send(new GetCommand({
+    TableName: TABLE_NAME,
+    Key: { PK: `TASK#${taskId}`, SK: 'METADATA' }
+  }));
+  const adminUserId = task.Item?.createdBy;
 
   const recipients = new Set();
   if (adminUserId) recipients.add(adminUserId);
   
   for (const assignment of assignments) {
-    recipients.add(assignment.UserId);
+    recipients.add(assignment.userId);
   }
 
   const updaterEmail = await getUserEmail(updatedBy);
@@ -88,10 +90,10 @@ async function handleTaskStatusUpdated(detail) {
       continue;
     }
 
-    await sendEmail(
+    await sendNotification(
       userEmail,
       `Task Status Updated: ${taskTitle}`,
-      `Hi,\n\nTask status has been updated:\n\nTask: ${taskTitle}\nPrevious Status: ${previousStatus}\nNew Status: ${newStatus}\nUpdated by: ${updaterName}\n\nLog in to view full details.\n\nBest regards,\nTask Management System`
+      `Task status has been updated:\n\nTask: ${taskTitle}\nPrevious Status: ${previousStatus}\nNew Status: ${newStatus}\nUpdated by: ${updaterName}`
     );
   }
 }
@@ -99,31 +101,37 @@ async function handleTaskStatusUpdated(detail) {
 async function handleTaskClosed(detail) {
   const { taskId, taskTitle, closedBy, finalStatus } = detail;
 
-  const assignments = await query({
-    KeyConditionExpression: 'PK = :taskId AND begins_with(SK, :assignment)',
-    ExpressionAttributeValues: {
-      ':taskId': `TASK#${taskId}`,
-      ':assignment': 'ASSIGNMENT#'
-    }
-  });
+  const assignments = await getAssignments(taskId);
 
   const adminEmail = await getUserEmail(closedBy);
   const adminName = adminEmail || 'Admin';
 
   for (const assignment of assignments) {
-    const userEmail = await getUserEmail(assignment.UserId);
+    const userEmail = await getUserEmail(assignment.userId);
     
     if (!userEmail) {
-      console.log(`User ${assignment.UserId} not found, skipping notification`);
+      console.log(`User ${assignment.userId} not found, skipping notification`);
       continue;
     }
 
-    await sendEmail(
+    await sendNotification(
       userEmail,
       `Task Closed: ${taskTitle}`,
-      `Hi,\n\nA task you were assigned to has been closed:\n\nTask: ${taskTitle}\nFinal Status: ${finalStatus}\nClosed by: ${adminName}\n\nThank you for your contribution.\n\nBest regards,\nTask Management System`
+      `A task you were assigned to has been closed:\n\nTask: ${taskTitle}\nFinal Status: ${finalStatus}\nClosed by: ${adminName}`
     );
   }
+}
+
+async function getAssignments(taskId) {
+  const result = await ddb.send(new QueryCommand({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :taskId AND begins_with(SK, :assignment)',
+    ExpressionAttributeValues: {
+      ':taskId': `TASK#${taskId}`,
+      ':assignment': 'ASSIGNMENT#'
+    }
+  }));
+  return result.Items || [];
 }
 
 async function getUserEmail(userId) {
@@ -142,32 +150,17 @@ async function getUserEmail(userId) {
   }
 }
 
-async function sendEmail(to, subject, body) {
-  const params = {
-    Source: SENDER_EMAIL,
-    Destination: {
-      ToAddresses: [to]
-    },
-    Message: {
-      Subject: {
-        Data: subject,
-        Charset: 'UTF-8'
-      },
-      Body: {
-        Text: {
-          Data: body,
-          Charset: 'UTF-8'
-        }
+async function sendNotification(userEmail, subject, message) {
+  await snsClient.send(new PublishCommand({
+    TopicArn: SNS_TOPIC_ARN,
+    Subject: subject,
+    Message: message,
+    MessageAttributes: {
+      email: {
+        DataType: 'String',
+        StringValue: userEmail
       }
     }
-  };
-
-  try {
-    const result = await sesClient.send(new SendEmailCommand(params));
-    console.log(`Email sent to ${to}, MessageId: ${result.MessageId}`);
-    return result;
-  } catch (error) {
-    console.error(`Failed to send email to ${to}:`, error);
-    throw error;
-  }
+  }));
+  console.log(`Notification sent for ${userEmail}`);
 }

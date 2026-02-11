@@ -58,7 +58,7 @@ variable "aws_region" {
   type        = string
 }
 
-variable "sender_email" {
-  description = "SES sender email address"
+variable "sns_topic_arn" {
+  description = "SNS topic ARN for notifications"
   type        = string
 }

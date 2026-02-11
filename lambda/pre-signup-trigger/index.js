@@ -1,3 +1,8 @@
+const { SNSClient, SubscribeCommand } = require('@aws-sdk/client-sns');
+
+const snsClient = new SNSClient({});
+const SNS_TOPIC_ARN = process.env.SNS_TOPIC_ARN;
+
 exports.handler = async (event) => {
   console.log('Pre Sign-Up Trigger:', JSON.stringify(event, null, 2));
 
@@ -15,8 +20,26 @@ exports.handler = async (event) => {
 
   console.log(`Valid domain: ${domain} - Allowing sign-up for: ${email}`);
   
-  event.response.autoConfirmUser = true;
-  event.response.autoVerifyEmail = true;
+  // Auto-subscribe user to SNS topic for notifications
+  if (SNS_TOPIC_ARN) {
+    try {
+      await snsClient.send(new SubscribeCommand({
+        TopicArn: SNS_TOPIC_ARN,
+        Protocol: 'email',
+        Endpoint: email,
+        Attributes: {
+          FilterPolicyScope: 'MessageAttributes',
+          FilterPolicy: JSON.stringify({ email: [email] })
+        }
+      }));
+      console.log(`SNS subscription created for ${email}`);
+    } catch (error) {
+      console.error('Failed to create SNS subscription:', error);
+    }
+  }
+  
+  event.response.autoConfirmUser = false;
+  event.response.autoVerifyEmail = false;
 
   return event;
 };

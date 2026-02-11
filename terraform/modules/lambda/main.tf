@@ -23,6 +23,22 @@ resource "aws_iam_role" "pre_signup" {
   })
 }
 
+resource "aws_iam_role_policy" "pre_signup" {
+  name = "${var.name_prefix}-pre-signup-policy"
+  role = aws_iam_role.pre_signup.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = "sns:Subscribe"
+        Resource = var.sns_topic_arn
+      }
+    ]
+  })
+}
+
 resource "aws_iam_role_policy_attachment" "pre_signup_basic" {
   role       = aws_iam_role.pre_signup.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
@@ -41,6 +57,7 @@ resource "aws_lambda_function" "pre_signup" {
   environment {
     variables = {
       ALLOWED_DOMAINS = join(",", ["amalitech.com", "amalitechtraining.org"])
+      SNS_TOPIC_ARN   = var.sns_topic_arn
     }
   }
 
@@ -177,11 +194,8 @@ resource "aws_iam_role_policy" "notification_handler" {
       },
       {
         Effect = "Allow"
-        Action = [
-          "ses:SendEmail",
-          "ses:SendRawEmail"
-        ]
-        Resource = "*"
+        Action = "sns:Publish"
+        Resource = var.sns_topic_arn
       },
       {
         Effect = "Allow"
@@ -219,7 +233,7 @@ resource "aws_lambda_function" "notification_handler" {
   environment {
     variables = {
       TABLE_NAME      = var.dynamodb_table_name
-      SENDER_EMAIL    = var.sender_email
+      SNS_TOPIC_ARN   = var.sns_topic_arn
       USER_POOL_ID    = var.cognito_user_pool_id
       AWS_REGION_NAME = var.aws_region
     }

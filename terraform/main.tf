@@ -38,7 +38,7 @@ module "lambda" {
   dynamodb_table_arn    = module.dynamodb.table_arn
   eventbridge_bus_name  = module.eventbridge.event_bus_name
   eventbridge_bus_arn   = module.eventbridge.event_bus_arn
-  sender_email          = var.ses_sender_email
+  sns_topic_arn         = module.sns.topic_arn
   project_name          = var.project_name
   environment           = var.environment
   cognito_user_pool_id  = module.cognito.user_pool_id
@@ -70,13 +70,13 @@ module "eventbridge" {
   environment               = var.environment
 }
 
-# SES
-module "ses" {
-  source = "./modules/ses"
+# SNS
+module "sns" {
+  source = "./modules/sns"
 
-  sender_email = var.ses_sender_email
-  project_name = var.project_name
-  environment  = var.environment
+  notification_emails = var.notification_emails
+  project_name        = var.project_name
+  environment         = var.environment
 }
 
 # CloudWatch Alarms

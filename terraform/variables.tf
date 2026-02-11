@@ -33,9 +33,10 @@ variable "admin_email" {
   type        = string
 }
 
-variable "ses_sender_email" {
-  description = "SES verified sender email"
-  type        = string
+variable "notification_emails" {
+  description = "List of admin email addresses to receive all notifications (members auto-subscribe on signup)"
+  type        = list(string)
+  default     = []
 }
 
 variable "allowed_email_domains" {

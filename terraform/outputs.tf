@@ -1,3 +1,18 @@
+output "sns_topic_arn" {
+  description = "SNS topic ARN for notifications"
+  value       = module.sns.topic_arn
+}
+
+output "sns_topic_name" {
+  description = "SNS topic name"
+  value       = module.sns.topic_name
+}
+
+output "notification_handler_lambda_name" {
+  description = "Notification handler Lambda function name"
+  value       = module.lambda.notification_handler_lambda_name
+}
+
 output "cognito_user_pool_id" {
   description = "Cognito User Pool ID"
   value       = module.cognito.user_pool_id
@@ -6,17 +21,16 @@ output "cognito_user_pool_id" {
 output "cognito_user_pool_client_id" {
   description = "Cognito User Pool Client ID"
   value       = module.cognito.user_pool_client_id
-  sensitive   = true
 }
 
-output "cognito_domain" {
-  description = "Cognito Hosted UI domain"
-  value       = module.cognito.cognito_domain
+output "appsync_graphql_url" {
+  description = "AppSync GraphQL API URL"
+  value       = module.appsync.graphql_endpoint
 }
 
-output "api_gateway_url" {
-  description = "API Gateway invoke URL"
-  value       = module.api_gateway.api_url
+output "appsync_api_id" {
+  description = "AppSync API ID"
+  value       = module.appsync.graphql_api_id
 }
 
 output "dynamodb_table_name" {
@@ -24,32 +38,7 @@ output "dynamodb_table_name" {
   value       = module.dynamodb.table_name
 }
 
-output "eventbridge_bus_name" {
-  description = "EventBridge event bus name"
-  value       = module.eventbridge.event_bus_name
-}
-
-output "region" {
-  description = "AWS region"
+output "aws_region" {
+  description = "AWS Region"
   value       = var.aws_region
-}
-
-output "appsync_graphql_endpoint" {
-  description = "AppSync GraphQL endpoint"
-  value       = module.appsync.graphql_endpoint
-}
-
-output "appsync_realtime_endpoint" {
-  description = "AppSync real-time endpoint"
-  value       = module.appsync.realtime_endpoint
-}
-
-output "appsync_graphql_api_id" {
-  description = "AppSync GraphQL API ID"
-  value       = module.appsync.graphql_api_id
-}
-
-output "s3_bucket_name" {
-  description = "S3 bucket name for attachments"
-  value       = module.s3.bucket_name
 }
