@@ -127,6 +127,11 @@ main() {
     build_lambda "task-api"
     build_lambda "notification-handler"
     build_lambda "users-api"
+    build_lambda "appsync-resolver"
+    build_lambda "stream-processor"
+    build_lambda "file-processor"
+    build_lambda "presigned-url"
+    build_lambda "github-webhook"
     
     echo ""
     echo "========================================"
@@ -139,6 +144,11 @@ main() {
     echo "  - ${LAMBDA_DIR}/task-api/function.zip"
     echo "  - ${LAMBDA_DIR}/notification-handler/function.zip"
     echo "  - ${LAMBDA_DIR}/users-api/function.zip"
+    echo "  - ${LAMBDA_DIR}/appsync-resolver/function.zip"
+    echo "  - ${LAMBDA_DIR}/stream-processor/function.zip"
+    echo "  - ${LAMBDA_DIR}/file-processor/function.zip"
+    echo "  - ${LAMBDA_DIR}/presigned-url/function.zip"
+    echo "  - ${LAMBDA_DIR}/github-webhook/function.zip"
     echo ""
 }
 

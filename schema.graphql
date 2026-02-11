@@ -1,0 +1,349 @@
+type Task {
+  taskId: ID!
+  title: String!
+  description: String
+  status: TaskStatus!
+  priority: Priority!
+  projectId: ID
+  sprintId: ID
+  assignees: [User!]
+  reporter: User!
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  dueDate: AWSDateTime
+  estimatedPoints: Int
+  labels: [String!]
+  gitBranch: String
+  prUrl: String
+  comments: [Comment!]
+  attachments: [Attachment!]
+  history: [TaskHistory!]
+}
+
+type Project {
+  projectId: ID!
+  name: String!
+  description: String
+  key: String!
+  lead: User!
+  members: [User!]
+  sprints: [Sprint!]
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime!
+  status: ProjectStatus!
+}
+
+type Sprint {
+  sprintId: ID!
+  projectId: ID!
+  name: String!
+  goal: String
+  startDate: AWSDateTime!
+  endDate: AWSDateTime!
+  status: SprintStatus!
+  tasks: [Task!]
+  velocity: Int
+  completedPoints: Int
+  totalPoints: Int
+  createdAt: AWSDateTime!
+}
+
+type Comment {
+  commentId: ID!
+  taskId: ID!
+  author: User!
+  content: String!
+  mentions: [User!]
+  createdAt: AWSDateTime!
+  updatedAt: AWSDateTime
+}
+
+type TaskHistory {
+  historyId: ID!
+  taskId: ID!
+  action: HistoryAction!
+  field: String
+  oldValue: String
+  newValue: String
+  changedBy: User!
+  timestamp: AWSDateTime!
+}
+
+type Attachment {
+  attachmentId: ID!
+  taskId: ID!
+  fileName: String!
+  fileSize: Int!
+  fileType: String!
+  s3Key: String!
+  uploadedBy: User!
+  uploadedAt: AWSDateTime!
+  downloadUrl: String
+}
+
+type User {
+  userId: ID!
+  email: AWSEmail!
+  name: String
+  groups: [String!]!
+  isAdmin: Boolean!
+  status: UserStatus!
+  avatar: String
+  createdAt: AWSDateTime!
+}
+
+type Notification {
+  notificationId: ID!
+  userId: ID!
+  type: NotificationType!
+  title: String!
+  message: String!
+  relatedTaskId: ID
+  read: Boolean!
+  createdAt: AWSDateTime!
+}
+
+type SearchResult {
+  tasks: [Task!]!
+  total: Int!
+  nextToken: String
+}
+
+type SprintMetrics {
+  sprintId: ID!
+  burndownData: [BurndownPoint!]!
+  velocity: Int!
+  completedPoints: Int!
+  totalPoints: Int!
+  completionRate: Float!
+}
+
+type BurndownPoint {
+  date: AWSDate!
+  remainingPoints: Int!
+  idealPoints: Int!
+}
+
+type Analytics {
+  cycleTime: Float!
+  throughput: Int!
+  workInProgress: Int!
+  blockedTasks: Int!
+}
+
+enum TaskStatus {
+  OPEN
+  IN_PROGRESS
+  IN_REVIEW
+  COMPLETED
+  CLOSED
+  BLOCKED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum ProjectStatus {
+  ACTIVE
+  ARCHIVED
+  ON_HOLD
+}
+
+enum SprintStatus {
+  PLANNED
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum UserStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
+enum HistoryAction {
+  CREATED
+  UPDATED
+  ASSIGNED
+  UNASSIGNED
+  STATUS_CHANGED
+  PRIORITY_CHANGED
+  COMMENTED
+  CLOSED
+}
+
+enum NotificationType {
+  TASK_ASSIGNED
+  TASK_UPDATED
+  COMMENT_ADDED
+  MENTION
+  SPRINT_STARTED
+  SPRINT_ENDED
+  DEADLINE_APPROACHING
+}
+
+input CreateTaskInput {
+  title: String!
+  description: String
+  priority: Priority!
+  projectId: ID
+  sprintId: ID
+  dueDate: AWSDateTime
+  estimatedPoints: Int
+  labels: [String!]
+}
+
+input UpdateTaskInput {
+  taskId: ID!
+  title: String
+  description: String
+  priority: Priority
+  status: TaskStatus
+  sprintId: ID
+  dueDate: AWSDateTime
+  estimatedPoints: Int
+  labels: [String!]
+  gitBranch: String
+  prUrl: String
+}
+
+input AssignTaskInput {
+  taskId: ID!
+  userId: ID!
+}
+
+input CreateProjectInput {
+  name: String!
+  description: String
+  key: String!
+  leadId: ID!
+}
+
+input CreateSprintInput {
+  projectId: ID!
+  name: String!
+  goal: String
+  startDate: AWSDateTime!
+  endDate: AWSDateTime!
+}
+
+input AddCommentInput {
+  taskId: ID!
+  content: String!
+  mentions: [ID!]
+}
+
+input SearchTasksInput {
+  query: String!
+  filters: SearchFilters
+  limit: Int
+  nextToken: String
+}
+
+input SearchFilters {
+  status: [TaskStatus!]
+  priority: [Priority!]
+  projectId: ID
+  sprintId: ID
+  assigneeId: ID
+}
+
+type Query {
+  # Tasks
+  getTask(taskId: ID!): Task
+  listTasks(status: TaskStatus, sprintId: ID, projectId: ID, limit: Int, nextToken: String): TaskConnection!
+  getMyTasks(status: TaskStatus): [Task!]!
+  searchTasks(input: SearchTasksInput!): SearchResult!
+  
+  # Projects
+  getProject(projectId: ID!): Project
+  listProjects(status: ProjectStatus): [Project!]!
+  
+  # Sprints
+  getSprint(sprintId: ID!): Sprint
+  listSprints(projectId: ID!, status: SprintStatus): [Sprint!]!
+  getSprintMetrics(sprintId: ID!): SprintMetrics!
+  
+  # Users
+  getUser(userId: ID!): User
+  listUsers(status: UserStatus): [User!]!
+  
+  # Comments
+  getTaskComments(taskId: ID!): [Comment!]!
+  
+  # Notifications
+  getMyNotifications(unreadOnly: Boolean): [Notification!]!
+  
+  # Analytics
+  getProjectAnalytics(projectId: ID!, startDate: AWSDate!, endDate: AWSDate!): Analytics!
+  
+  # Files
+  getPresignedUploadUrl(fileName: String!, fileType: String!, taskId: ID!): PresignedUrl!
+  getPresignedDownloadUrl(attachmentId: ID!): PresignedUrl!
+}
+
+type Mutation {
+  # Tasks
+  createTask(input: CreateTaskInput!): Task!
+  updateTask(input: UpdateTaskInput!): Task!
+  deleteTask(taskId: ID!): Boolean!
+  assignTask(input: AssignTaskInput!): Task!
+  unassignTask(taskId: ID!, userId: ID!): Task!
+  closeTask(taskId: ID!): Task!
+  
+  # Projects
+  createProject(input: CreateProjectInput!): Project!
+  updateProject(projectId: ID!, name: String, description: String): Project!
+  archiveProject(projectId: ID!): Project!
+  
+  # Sprints
+  createSprint(input: CreateSprintInput!): Sprint!
+  startSprint(sprintId: ID!): Sprint!
+  completeSprint(sprintId: ID!): Sprint!
+  
+  # Comments
+  addComment(input: AddCommentInput!): Comment!
+  updateComment(commentId: ID!, content: String!): Comment!
+  deleteComment(commentId: ID!): Boolean!
+  
+  # Notifications
+  markNotificationRead(notificationId: ID!): Notification!
+  markAllNotificationsRead: Boolean!
+  
+  # Files
+  attachFile(taskId: ID!, fileName: String!, fileSize: Int!, fileType: String!, s3Key: String!): Attachment!
+  deleteAttachment(attachmentId: ID!): Boolean!
+}
+
+type Subscription {
+  onTaskCreated(projectId: ID, sprintId: ID): Task
+    @aws_subscribe(mutations: ["createTask"])
+  
+  onTaskUpdated(taskId: ID): Task
+    @aws_subscribe(mutations: ["updateTask", "assignTask", "unassignTask"])
+  
+  onCommentAdded(taskId: ID!): Comment
+    @aws_subscribe(mutations: ["addComment"])
+}
+
+type TaskConnection {
+  items: [Task!]!
+  nextToken: String
+  total: Int!
+}
+
+type PresignedUrl {
+  url: String!
+  expiresIn: Int!
+  fields: AWSJSON
+}
+
+schema {
+  query: Query
+  mutation: Mutation
+  subscription: Subscription
+}

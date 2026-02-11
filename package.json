@@ -1,0 +1,29 @@
+{
+  "name": "aws-serverless-task-manager",
+  "version": "2.0.0",
+  "description": "Production-grade serverless task management system",
+  "private": true,
+  "scripts": {
+    "setup": "cd terraform && terraform init && cd ../frontend && npm install",
+    "deploy:backend": "cd terraform && terraform apply -auto-approve",
+    "deploy:frontend": "cd frontend && npm run build && amplify publish",
+    "config:frontend": "cd frontend && ./scripts/configure.sh",
+    "dev:frontend": "cd frontend && npm run dev",
+    "build:lambdas": "./scripts/build-lambdas.sh",
+    "build:layer": "./scripts/build-layer.sh",
+    "upload:schema": "./scripts/upload-schema.sh",
+    "create:resolvers": "./scripts/create-resolvers.sh",
+    "test:e2e": "./scripts/e2e-tests.sh",
+    "create:admin": "./scripts/create-admin.sh",
+    "verify:ses": "./scripts/verify-ses-email.sh"
+  },
+  "keywords": [
+    "aws",
+    "serverless",
+    "task-management",
+    "nextjs",
+    "terraform"
+  ],
+  "author": "Abraham Ayamigah",
+  "license": "MIT"
+}

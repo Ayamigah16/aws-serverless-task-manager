@@ -20,12 +20,20 @@ error_exit() { log_error "$1"; exit "${2:-1}"; }
 # Get User Pool ID from Terraform
 get_user_pool_id() {
     local pool_id=""
-    if [[ -f terraform/terraform.tfstate ]]; then
-        pool_id=$(cd terraform && terraform output -raw cognito_user_pool_id 2>/dev/null) || pool_id=""
+    local terraform_dir="terraform"
+    
+    # Check if running from project root or scripts directory
+    if [[ ! -d "${terraform_dir}" ]] && [[ -d "../${terraform_dir}" ]]; then
+        terraform_dir="../${terraform_dir}"
+    fi
+    
+    if [[ -d "${terraform_dir}" ]]; then
+        pool_id=$(cd "${terraform_dir}" && terraform output -raw cognito_user_pool_id 2>/dev/null) || pool_id=""
     fi
     
     if [[ -z "${pool_id}" ]]; then
         log_error "Could not get User Pool ID from Terraform"
+        log_info "Make sure you have run 'terraform apply' first"
         read -p "Enter User Pool ID manually: " pool_id
     fi
     
