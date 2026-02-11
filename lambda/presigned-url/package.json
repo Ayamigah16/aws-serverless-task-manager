@@ -1,0 +1,11 @@
+{
+  "name": "presigned-url",
+  "version": "1.0.0",
+  "description": "Generate presigned URLs for S3 uploads/downloads",
+  "main": "index.js",
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.400.0",
+    "@aws-sdk/s3-request-presigner": "^3.400.0",
+    "uuid": "^9.0.0"
+  }
+}

@@ -191,6 +191,26 @@ async function assignTask(taskId, event, userId, userIsAdmin) {
     return notFound('Task not found');
   }
 
+  const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+  const cognito = new CognitoIdentityProviderClient({ region: process.env.AWS_REGION_NAME });
+  
+  try {
+    const userCommand = new AdminGetUserCommand({
+      UserPoolId: process.env.USER_POOL_ID,
+      Username: assignedTo
+    });
+    const userResponse = await cognito.send(userCommand);
+    
+    if (!userResponse.Enabled) {
+      return forbidden('Cannot assign tasks to deactivated users');
+    }
+  } catch (err) {
+    if (err.name === 'UserNotFoundException') {
+      return notFound('Assigned user not found');
+    }
+    throw err;
+  }
+
   try {
     const assignment = {
       PK: `TASK#${taskId}`,

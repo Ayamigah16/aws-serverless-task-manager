@@ -1,0 +1,11 @@
+{
+  "name": "stream-processor",
+  "version": "1.0.0",
+  "description": "DynamoDB Streams processor for OpenSearch sync",
+  "main": "index.js",
+  "dependencies": {
+    "@opensearch-project/opensearch": "^2.5.0",
+    "@aws-sdk/credential-provider-node": "^3.400.0",
+    "aws4": "^1.12.0"
+  }
+}
