@@ -91,3 +91,32 @@ module "cloudwatch_alarms" {
     module.lambda.notification_handler_lambda_name
   ]
 }
+
+# AppSync GraphQL API
+module "appsync" {
+  source = "./modules/appsync"
+
+  api_name              = "${local.name_prefix}-graphql"
+  aws_region            = var.aws_region
+  cognito_user_pool_id  = module.cognito.user_pool_id
+  dynamodb_table_name   = module.dynamodb.table_name
+  dynamodb_table_arn    = module.dynamodb.table_arn
+  resolver_lambda_arn   = module.lambda.appsync_resolver_lambda_arn
+  opensearch_endpoint   = ""
+  opensearch_arn        = ""
+  project_name          = var.project_name
+  environment           = var.environment
+}
+
+# S3 File Storage
+module "s3" {
+  source = "./modules/s3"
+
+  bucket_name                 = "${local.name_prefix}-attachments"
+  file_processor_lambda_arn   = module.lambda.task_api_lambda_arn
+  file_processor_lambda_name  = module.lambda.task_api_lambda_name
+  lambda_role_arn            = module.lambda.task_api_role_arn
+  allowed_origins            = ["http://localhost:3000", "https://*.amplifyapp.com"]
+  project_name               = var.project_name
+  environment                = var.environment
+}

@@ -33,3 +33,23 @@ output "region" {
   description = "AWS region"
   value       = var.aws_region
 }
+
+output "appsync_graphql_endpoint" {
+  description = "AppSync GraphQL endpoint"
+  value       = module.appsync.graphql_endpoint
+}
+
+output "appsync_realtime_endpoint" {
+  description = "AppSync real-time endpoint"
+  value       = module.appsync.realtime_endpoint
+}
+
+output "appsync_graphql_api_id" {
+  description = "AppSync GraphQL API ID"
+  value       = module.appsync.graphql_api_id
+}
+
+output "s3_bucket_name" {
+  description = "S3 bucket name for attachments"
+  value       = module.s3.bucket_name
+}

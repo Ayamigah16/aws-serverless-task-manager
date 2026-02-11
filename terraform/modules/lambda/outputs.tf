@@ -27,3 +27,18 @@ output "notification_handler_lambda_name" {
   description = "Notification Handler Lambda name"
   value       = aws_lambda_function.notification_handler.function_name
 }
+
+output "task_api_role_arn" {
+  description = "Task API Lambda execution role ARN"
+  value       = aws_iam_role.task_api.arn
+}
+
+output "appsync_resolver_lambda_arn" {
+  description = "AppSync Resolver Lambda ARN"
+  value       = aws_lambda_function.appsync_resolver.arn
+}
+
+output "appsync_resolver_lambda_name" {
+  description = "AppSync Resolver Lambda name"
+  value       = aws_lambda_function.appsync_resolver.function_name
+}
