@@ -11,7 +11,6 @@
     "config:amplify": "./scripts/update-amplify-env.sh",
     "dev:frontend": "cd frontend && npm run dev",
     "build:lambdas": "./scripts/build-lambdas.sh",
-    "build:layer": "./scripts/build-layer.sh",
     "upload:schema": "./scripts/upload-schema.sh",
     "create:resolvers": "./scripts/create-resolvers.sh",
     "test:e2e": "./scripts/e2e-tests.sh",
