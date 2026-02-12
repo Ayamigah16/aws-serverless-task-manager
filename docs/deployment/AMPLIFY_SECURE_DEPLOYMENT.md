@@ -130,7 +130,7 @@ terraform apply
 When you need to rotate your GitHub token (e.g., expiration, security incident):
 
 ```bash
-./scripts/create-github-secret.sh
+./scripts/create-github-secret.sh ##
 ```
 
 **What happens:**
