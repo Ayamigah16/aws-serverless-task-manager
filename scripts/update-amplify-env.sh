@@ -1,39 +1,15 @@
 #!/bin/bash
-
 # Update Amplify Environment Variables from Terraform Outputs
 # This script fetches infrastructure outputs from Terraform and configures Amplify
 
 set -euo pipefail
-IFS=$'\n\t'
+
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh"
 
 # Configuration
-readonly SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-readonly PROJECT_ROOT="$(dirname "${SCRIPT_DIR}")"
 readonly TERRAFORM_DIR="${PROJECT_ROOT}/terraform"
-
-# Colors
-readonly GREEN='\033[0;32m'
-readonly BLUE='\033[0;34m'
-readonly YELLOW='\033[1;33m'
-readonly RED='\033[0;31m'
-readonly NC='\033[0m'
-
-# Logging functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $*"
-}
-
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $*"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $*"
-}
-
-log_success() {
-    echo -e "${GREEN}[✓]${NC} $*"
-}
 
 # Usage information
 usage() {
@@ -65,31 +41,6 @@ REQUIREMENTS:
 
 EOF
     exit 1
-}
-
-# Check prerequisites
-check_prerequisites() {
-    log_info "Checking prerequisites..."
-
-    local missing=()
-
-    command -v aws >/dev/null 2>&1 || missing+=("aws-cli")
-    command -v jq >/dev/null 2>&1 || missing+=("jq")
-    command -v terraform >/dev/null 2>&1 || missing+=("terraform")
-
-    if [ ${#missing[@]} -ne 0 ]; then
-        log_error "Missing required tools: ${missing[*]}"
-        log_error "Please install them and try again"
-        exit 1
-    fi
-
-    # Check if terraform directory exists
-    if [ ! -d "${TERRAFORM_DIR}" ]; then
-        log_error "Terraform directory not found: ${TERRAFORM_DIR}"
-        exit 1
-    fi
-
-    log_success "Prerequisites check passed"
 }
 
 # Get Terraform outputs
@@ -360,7 +311,9 @@ EOF
     echo ""
 
     # Check prerequisites
-    check_prerequisites
+    # Check prerequisites
+    require_commands aws jq terraform
+    check_aws_auth
 
     # Get Terraform outputs
     get_terraform_outputs "${environment}"

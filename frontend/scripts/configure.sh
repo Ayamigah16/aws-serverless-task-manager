@@ -1,31 +1,40 @@
 #!/bin/bash
-set -e
+# Frontend Configuration Script
+# Configures frontend with backend endpoints from Terraform
 
-echo "🚀 Configuring Frontend with Lambda Endpoints..."
+set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/../../scripts/lib/common.sh"
 
-TERRAFORM_DIR="../terraform"
+# ============================================================================
+# FUNCTIONS
+# ============================================================================
 
-if [ ! -d "$TERRAFORM_DIR" ]; then
-  echo "❌ Terraform directory not found"
-  exit 1
-fi
+# Fetch Terraform outputs
+fetch_terraform_outputs() {
+    local terraform_dir="../terraform"
 
-cd "$TERRAFORM_DIR"
+    [ ! -d "$terraform_dir" ] && die "Terraform directory not found"
 
-echo "📡 Fetching Terraform outputs..."
+    cd "$terraform_dir"
 
-API_ENDPOINT=$(terraform output -raw api_gateway_url 2>/dev/null)
-USER_POOL_ID=$(terraform output -raw cognito_user_pool_id 2>/dev/null)
-USER_POOL_CLIENT_ID=$(terraform output -raw cognito_user_pool_client_id 2>/dev/null)
-AWS_REGION=$(terraform output -raw region 2>/dev/null)
-APPSYNC_ENDPOINT=$(terraform output -raw appsync_graphql_endpoint 2>/dev/null || echo "")
-S3_BUCKET=$(terraform output -raw s3_bucket_name 2>/dev/null || echo "")
+    log_info "Fetching Terraform outputs"
 
-cd - > /dev/null
+    API_ENDPOINT=$(get_terraform_output "api_gateway_url")
+    USER_POOL_ID=$(get_terraform_output "cognito_user_pool_id")
+    USER_POOL_CLIENT_ID=$(get_terraform_output "cognito_user_pool_client_id")
+    AWS_REGION=$(get_terraform_output "region")
+    APPSYNC_ENDPOINT=$(get_terraform_output "appsync_graphql_endpoint" 2>/dev/null || echo "")
+    S3_BUCKET=$(get_terraform_output "s3_bucket_name" 2>/dev/null || echo "")
 
-cat > .env.local <<EOF
+    cd - > /dev/null
+}
+
+# Create environment configuration file
+create_env_file() {
+    cat > .env.local <<EOF
 NEXT_PUBLIC_USER_POOL_ID=$USER_POOL_ID
 NEXT_PUBLIC_USER_POOL_CLIENT_ID=$USER_POOL_CLIENT_ID
 NEXT_PUBLIC_APPSYNC_ENDPOINT=$APPSYNC_ENDPOINT
@@ -33,16 +42,35 @@ NEXT_PUBLIC_API_ENDPOINT=$API_ENDPOINT
 NEXT_PUBLIC_S3_BUCKET=$S3_BUCKET
 NEXT_PUBLIC_AWS_REGION=$AWS_REGION
 EOF
+}
 
-echo ""
-echo "✅ Frontend configured successfully!"
-echo ""
-echo "Configuration:"
-echo "  API Gateway: $API_ENDPOINT"
-echo "  User Pool: $USER_POOL_ID"
-echo "  Client ID: ${USER_POOL_CLIENT_ID:0:20}..."
-echo "  Region: $AWS_REGION"
-[ -n "$APPSYNC_ENDPOINT" ] && echo "  AppSync: $APPSYNC_ENDPOINT"
-[ -n "$S3_BUCKET" ] && echo "  S3 Bucket: $S3_BUCKET"
-echo ""
-echo "Run 'npm run dev' to start the development server"
+# Display configuration summary
+show_summary() {
+    log_success "Frontend configured"
+    log_info "API Gateway: $API_ENDPOINT"
+    log_info "User Pool: $USER_POOL_ID"
+    log_info "Client ID: ${USER_POOL_CLIENT_ID:0:20}..."
+    log_info "Region: $AWS_REGION"
+    [ -n "$APPSYNC_ENDPOINT" ] && log_info "AppSync: $APPSYNC_ENDPOINT"
+    [ -n "$S3_BUCKET" ] && log_info "S3 Bucket: $S3_BUCKET"
+    log_info "Run 'npm run dev' to start development server"
+}
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+main() {
+    cd "$(dirname "$0")/.."
+
+    # Fetch outputs from Terraform
+    fetch_terraform_outputs
+
+    # Create .env.local file
+    create_env_file
+
+    # Show summary
+    show_summary
+}
+
+main "$@"

@@ -30,7 +30,6 @@ deploy_terraform() {
 
 main() {
     log_info "Deploy SNS Notification System"
-    echo ""
 
     # Check prerequisites
     require_commands aws terraform
@@ -41,7 +40,6 @@ main() {
     log_info "  • SNS topic and subscriptions"
     log_info "  • notification-handler Lambda function"
     log_info "  • EventBridge rules for notifications"
-    echo ""
 
     deploy_terraform
 
@@ -50,9 +48,7 @@ main() {
     sns_topic_arn=$(get_terraform_output "sns_topic_arn") || die "Failed to get SNS topic ARN"
     log_info "SNS Topic: ${sns_topic_arn}"
 
-    echo ""
     log_success "SNS deployment complete"
-    echo ""
     log_warn "Check your email to confirm SNS subscriptions"
     log_info "AWS sends confirmation emails to addresses in notification_emails"
 }

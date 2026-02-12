@@ -1,37 +1,52 @@
 #!/bin/bash
-set -e
+# Upload AppSync Schema Script
+# Uploads GraphQL schema to AppSync API
 
-echo "📤 Uploading AppSync GraphQL Schema..."
+set -euo pipefail
 
-cd "$(dirname "$0")/.."
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh"
 
-if [ ! -f "schema.graphql" ]; then
-  echo "❌ schema.graphql not found"
-  exit 1
-fi
+# ============================================================================
+# FUNCTIONS
+# ============================================================================
 
-cd terraform
+# Upload schema to AppSync
+upload_schema() {
+    local api_id="$1"
 
-API_ID=$(terraform output -raw appsync_graphql_api_id 2>/dev/null)
+    log_info "Uploading schema to AppSync API: $api_id"
 
-if [ -z "$API_ID" ]; then
-  echo "❌ AppSync API not deployed. Run 'terraform apply' first."
-  exit 1
-fi
+    aws appsync start-schema-creation \
+      --api-id "$api_id" \
+      --definition "$(cat schema.graphql | base64)"
 
-cd ..
+    log_success "Schema upload initiated"
+    log_info "Schema creation is asynchronous. Check status with:"
+    log_info "  aws appsync get-schema-creation-status --api-id $api_id"
+    log_info "Once complete, configure resolvers or run: ./scripts/create-resolvers.sh"
+}
 
-echo "📡 Uploading schema to AppSync API: $API_ID"
+# ============================================================================
+# MAIN
+# ============================================================================
 
-aws appsync start-schema-creation \
-  --api-id "$API_ID" \
-  --definition "$(cat schema.graphql | base64)"
+main() {
+    cd "$(dirname "$0")/.."
 
-echo ""
-echo "✅ Schema upload initiated!"
-echo ""
-echo "Note: Schema creation is asynchronous. Check status with:"
-echo "  aws appsync get-schema-creation-status --api-id $API_ID"
-echo ""
-echo "Once complete, configure resolvers in AWS Console or run:"
-echo "  aws appsync create-resolver --api-id $API_ID ..."
+    log_info "Uploading AppSync GraphQL Schema"
+
+    # Check if schema file exists
+    [ ! -f "schema.graphql" ] && die "schema.graphql not found"
+
+    # Get AppSync API ID
+    local api_id
+    api_id=$(get_terraform_output "appsync_graphql_api_id")
+    [ -z "$api_id" ] && die "AppSync API not deployed. Run 'terraform apply' first."
+
+    # Upload schema
+    upload_schema "$api_id"
+}
+
+main "$@"

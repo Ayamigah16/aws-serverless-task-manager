@@ -1,60 +1,36 @@
 #!/bin/bash
-
 # CI/CD Setup Script
 # This script helps configure GitHub Actions CI/CD for the AWS Serverless Task Manager
 
-set -e
+set -euo pipefail
 
-# Colors
-readonly GREEN='\033[0;32m'
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh"
+
+# ============================================================================
+# CONFIGURATION
+# ============================================================================
+
 readonly BLUE='\033[0;34m'
-readonly YELLOW='\033[1;33m'
-readonly RED='\033[0;31m'
 readonly NC='\033[0m'
 
-echo -e "${BLUE}"
-cat << "EOF"
+# ============================================================================
+# FUNCTIONS
+# ============================================================================
+
+# Display banner
+show_banner() {
+    echo -e "${BLUE}"
+    cat << "EOF"
 ╔═══════════════════════════════════════════════════════════╗
 ║     AWS Serverless Task Manager - CI/CD Setup            ║
 ╚═══════════════════════════════════════════════════════════╝
 EOF
-echo -e "${NC}"
-
-# Functions
-log_info() {
-    echo -e "${GREEN}[INFO]${NC} $*"
+    echo -e "${NC}"
 }
 
-log_warn() {
-    echo -e "${YELLOW}[WARN]${NC} $*"
-}
-
-log_error() {
-    echo -e "${RED}[ERROR]${NC} $*"
-}
-
-prompt() {
-    echo -e "${BLUE}[?]${NC} $1"
-}
-
-check_prerequisites() {
-    log_info "Checking prerequisites..."
-
-    local missing=()
-
-    command -v aws >/dev/null 2>&1 || missing+=("aws-cli")
-    command -v jq >/dev/null 2>&1 || missing+=("jq")
-    command -v gh >/dev/null 2>&1 || log_warn "GitHub CLI (gh) not found - will show manual instructions"
-
-    if [ ${#missing[@]} -ne 0 ]; then
-        log_error "Missing required tools: ${missing[*]}"
-        log_error "Please install them and try again"
-        exit 1
-    fi
-
-    log_info "Prerequisites check passed ✓"
-}
-
+# Get AWS account information
 get_aws_info() {
     log_info "Gathering AWS account information..."
 
@@ -305,7 +281,13 @@ print_summary() {
 
 # Main execution
 main() {
-    check_prerequisites
+    # Check prerequisites
+    require_commands aws jq
+    check_aws_auth
+
+    if ! command -v gh &> /dev/null; then
+        log_warn "GitHub CLI (gh) not found - will show manual instructions"
+    fi
     get_aws_info
 
     prompt "Enter your GitHub repository (format: owner/repo): "

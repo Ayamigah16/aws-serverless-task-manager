@@ -1,19 +1,34 @@
 #!/bin/bash
+# Check User Groups Script
+# Shows which groups a user belongs to
 
-if [ -z "$1" ]; then
-  echo "Usage: ./check-user-groups.sh <user-email>"
-  exit 1
-fi
+set -euo pipefail
 
-USER_EMAIL=$1
-USER_POOL_ID=$(cd terraform && terraform output -raw cognito_user_pool_id 2>/dev/null)
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib/common.sh"
 
-echo "Checking groups for: $USER_EMAIL"
-echo "User Pool ID: $USER_POOL_ID"
-echo ""
+# ============================================================================
+# MAIN
+# ============================================================================
 
-aws cognito-idp admin-list-groups-for-user \
-  --user-pool-id "$USER_POOL_ID" \
-  --username "$USER_EMAIL" \
-  --query "Groups[].GroupName" \
-  --output table
+main() {
+    # Validate input
+    if [ -z "${1:-}" ]; then
+      die "Usage: ./check-user-groups.sh <user-email>"
+    fi
+
+    local user_email="$1"
+    local user_pool_id
+    user_pool_id=$(get_terraform_output "cognito_user_pool_id")
+
+    log_info "Checking groups for: $user_email"
+
+    aws cognito-idp admin-list-groups-for-user \
+      --user-pool-id "$user_pool_id" \
+      --username "$user_email" \
+      --query "Groups[].GroupName" \
+      --output table
+}
+
+main "$@"
