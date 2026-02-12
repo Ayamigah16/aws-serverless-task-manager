@@ -8,6 +8,7 @@
     "deploy:backend": "cd terraform && terraform apply -auto-approve",
     "deploy:frontend": "cd frontend && npm run build && amplify publish",
     "config:frontend": "cd frontend && ./scripts/configure.sh",
+    "config:amplify": "./scripts/update-amplify-env.sh",
     "dev:frontend": "cd frontend && npm run dev",
     "build:lambdas": "./scripts/build-lambdas.sh",
     "build:layer": "./scripts/build-layer.sh",

@@ -24,8 +24,16 @@ yarn-debug.log*
 yarn-error.log*
 
 # Local env files
-.env*.local
 .env
+.env*.local
+.env.development
+.env.production
+.env.test
+
+# Sensitive configuration files
+config.local.js
+secrets.json
+credentials.json
 
 # Vercel
 .vercel
@@ -39,13 +47,17 @@ terraform/.terraform/
 terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
+terraform/*.tfvars
+!terraform/environments/*.tfvars
 *.tfstate
 *.tfstate.*
+.terraform.lock.hcl
 
 # Lambda
 lambda/**/node_modules/
 lambda/**/*.zip
 lambda/**/package-lock.json
+lambda/**/.env
 
 # IDE
 .vscode/
@@ -56,3 +68,23 @@ lambda/**/package-lock.json
 
 # OS
 Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+*.log
+.cache/
+
+# Security
+*.key
+*.pem
+*.p12
+*.pfx
+*.cer
+*.crt
+
+# Scripts output
+scripts/*.json
+scripts/*.tmp
+/tmp/
+

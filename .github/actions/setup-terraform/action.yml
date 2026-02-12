@@ -1,0 +1,39 @@
+name: 'Setup Terraform'
+description: 'Reusable action to setup and initialize Terraform'
+
+inputs:
+  terraform-version:
+    description: 'Terraform version to use'
+    required: false
+    default: '1.5.0'
+  environment:
+    description: 'Environment name'
+    required: true
+  backend-bucket:
+    description: 'S3 bucket for Terraform state'
+    required: true
+  backend-lock-table:
+    description: 'DynamoDB table for state locking'
+    required: true
+  aws-region:
+    description: 'AWS Region'
+    required: false
+    default: 'eu-west-1'
+
+runs:
+  using: "composite"
+  steps:
+  - name: Setup Terraform
+    uses: hashicorp/setup-terraform@v3
+    with:
+      terraform_version: ${{ inputs.terraform-version }}
+
+  - name: Terraform Init
+    shell: bash
+    working-directory: ./terraform
+    run: |
+      terraform init \
+        -backend-config="bucket=${{ inputs.backend-bucket }}" \
+        -backend-config="key=${{ inputs.environment }}/terraform.tfstate" \
+        -backend-config="region=${{ inputs.aws-region }}" \
+        -backend-config="dynamodb_table=${{ inputs.backend-lock-table }}"

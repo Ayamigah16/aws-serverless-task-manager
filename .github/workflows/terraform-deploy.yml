@@ -1,0 +1,175 @@
+name: Terraform Infrastructure Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+        - sandbox
+        - staging
+        - production
+      action:
+        description: 'Terraform action'
+        required: true
+        type: choice
+        default: 'plan'
+        options:
+        - plan
+        - apply
+        - destroy
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+      action:
+        required: false
+        type: string
+        default: 'plan'
+
+env:
+  TF_VERSION: '1.5.0'
+  AWS_REGION: 'eu-west-1'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  terraform:
+    name: Terraform ${{ inputs.action }} - ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    defaults:
+      run:
+        working-directory: ./terraform
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: ${{ env.TF_VERSION }}
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+        role-session-name: GitHubActions-Terraform
+
+    - name: Terraform Format Check
+      id: fmt
+      run: terraform fmt -check -recursive
+      continue-on-error: true
+
+    - name: Terraform Init
+      id: init
+      run: |
+        terraform init \
+          -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+          -backend-config="key=${{ inputs.environment }}/terraform.tfstate" \
+          -backend-config="region=${{ env.AWS_REGION }}" \
+          -backend-config="dynamodb_table=${{ secrets.TF_STATE_LOCK_TABLE }}"
+
+    - name: Terraform Validate
+      id: validate
+      run: terraform validate -no-color
+
+    - name: Terraform Plan
+      id: plan
+      if: inputs.action == 'plan' || inputs.action == 'apply'
+      run: |
+        terraform plan \
+          -var-file="environments/${{ inputs.environment }}.tfvars" \
+          -var="environment=${{ inputs.environment }}" \
+          -out=tfplan \
+          -no-color
+      continue-on-error: false
+
+    - name: Upload Terraform Plan
+      if: inputs.action == 'plan' || inputs.action == 'apply'
+      uses: actions/upload-artifact@v4
+      with:
+        name: tfplan-${{ inputs.environment }}
+        path: terraform/tfplan
+        retention-days: 5
+
+    - name: Comment Plan on PR
+      if: github.event_name == 'pull_request' && inputs.action == 'plan'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const output = `#### Terraform Format and Style 🖌 \`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️ \`${{ steps.init.outcome }}\`
+          #### Terraform Validation 🤖 \`${{ steps.validate.outcome }}\`
+          #### Terraform Plan 📖 \`${{ steps.plan.outcome }}\`
+
+          <details><summary>Show Plan</summary>
+
+          \`\`\`terraform
+          ${{ steps.plan.outputs.stdout }}
+          \`\`\`
+
+          </details>
+
+          *Environment: ${{ inputs.environment }}*
+          *Pushed by: @${{ github.actor }}, Action: \`${{ github.event_name }}\`*`;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: output
+          })
+
+    - name: Terraform Apply
+      if: inputs.action == 'apply'
+      run: terraform apply -auto-approve tfplan
+
+    - name: Terraform Destroy
+      if: inputs.action == 'destroy'
+      run: |
+        terraform destroy \
+          -var-file="environments/${{ inputs.environment }}.tfvars" \
+          -var="environment=${{ inputs.environment }}" \
+          -auto-approve
+
+    - name: Terraform Output
+      if: inputs.action == 'apply'
+      id: output
+      run: terraform output -json > outputs.json
+
+    - name: Upload Terraform Outputs
+      if: inputs.action == 'apply'
+      uses: actions/upload-artifact@v4
+      with:
+        name: terraform-outputs-${{ inputs.environment }}
+        path: terraform/outputs.json
+        retention-days: 30
+
+    - name: Notify Slack on Failure
+      if: failure() && (inputs.action == 'apply' || inputs.action == 'destroy')
+      uses: slackapi/slack-github-action@v1
+      with:
+        payload: |
+          {
+            "text": "🚨 Terraform ${{ inputs.action }} failed for ${{ inputs.environment }}",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Terraform Deployment Failed*\n*Environment:* ${{ inputs.environment }}\n*Action:* ${{ inputs.action }}\n*Actor:* ${{ github.actor }}"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}

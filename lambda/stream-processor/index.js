@@ -3,7 +3,7 @@ const { defaultProvider } = require('@aws-sdk/credential-provider-node');
 const aws4 = require('aws4');
 
 const OPENSEARCH_ENDPOINT = process.env.OPENSEARCH_ENDPOINT;
-const AWS_REGION = process.env.AWS_REGION || 'us-east-1';
+const AWS_REGION = process.env.AWS_REGION || 'eu-west-1';
 
 const client = new Client({
   node: OPENSEARCH_ENDPOINT,
@@ -29,7 +29,7 @@ exports.handler = async (event) => {
 
     if (eventName === 'INSERT' || eventName === 'MODIFY') {
       const newImage = unmarshall(dynamodb.NewImage);
-      
+
       if (newImage.EntityType === 'TASK' && newImage.SK === 'METADATA') {
         operations.push(indexTask(newImage));
       } else if (newImage.EntityType === 'COMMENT') {
@@ -39,7 +39,7 @@ exports.handler = async (event) => {
       }
     } else if (eventName === 'REMOVE') {
       const oldImage = unmarshall(dynamodb.OldImage);
-      
+
       if (oldImage.EntityType === 'TASK') {
         operations.push(deleteTask(oldImage.taskId));
       } else if (oldImage.EntityType === 'COMMENT') {

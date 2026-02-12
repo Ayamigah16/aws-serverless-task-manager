@@ -48,7 +48,7 @@ for query in "${QUERIES[@]}"; do
     --data-source-name LambdaDataSource \
     --request-mapping-template "$REQUEST_TEMPLATE" \
     --response-mapping-template "$RESPONSE_TEMPLATE" \
-    --region eu-west-1 \
+    --region "${AWS_REGION:-eu-west-1}" \
     2>/dev/null || echo "    (already exists)"
 done
 
@@ -63,7 +63,7 @@ for mutation in "${MUTATIONS[@]}"; do
     --data-source-name LambdaDataSource \
     --request-mapping-template "$REQUEST_TEMPLATE" \
     --response-mapping-template "$RESPONSE_TEMPLATE" \
-    --region eu-west-1 \
+    --region "${AWS_REGION:-eu-west-1}" \
     2>/dev/null || echo "    (already exists)"
 done
 

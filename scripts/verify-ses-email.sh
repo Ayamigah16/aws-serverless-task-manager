@@ -1,32 +1,84 @@
 #!/bin/bash
+# SES Email Verification Script
+# Verifies an email address for use with Amazon SES
 
-set -e
+set -euo pipefail
 
-REGION="eu-west-1"
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
 
-echo "========================================="
-echo "SES Email Verification Script"
-echo "========================================="
-echo ""
+# ============================================================================
+# FUNCTIONS
+# ============================================================================
 
-read -p "Enter the email address to verify for SES: " EMAIL
+# Verify email with SES
+verify_ses_email() {
+    local email="$1"
 
-if [[ ! "$EMAIL" =~ ^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$ ]]; then
-    echo "❌ Invalid email format"
-    exit 1
-fi
+    log_info "Sending verification email to: ${email}"
 
-echo ""
-echo "Verifying email: $EMAIL in region: $REGION"
-echo ""
+    aws ses verify-email-identity \
+        --email-address "${email}" \
+        --region "${AWS_REGION}" \
+        --no-cli-pager || die "Failed to verify email"
 
-aws ses verify-email-identity --email-address "$EMAIL" --region "$REGION"
+    log_success "Verification email sent"
+}
 
-echo ""
-echo "✅ Verification email sent to: $EMAIL"
-echo ""
-echo "📧 Check your inbox and click the verification link"
-echo ""
-echo "To check verification status, run:"
-echo "aws ses get-identity-verification-attributes --identities $EMAIL --region $REGION"
-echo ""
+# Check verification status
+check_verification_status() {
+    local email="$1"
+
+    log_info "Checking verification status"
+
+    local status
+    status=$(aws ses get-identity-verification-attributes \
+        --identities "${email}" \
+        --region "${AWS_REGION}" \
+        --query "VerificationAttributes.\"${email}\".VerificationStatus" \
+        --output text 2>/dev/null) || status="Unknown"
+
+    echo "${status}"
+}
+
+# ============================================================================
+# MAIN
+# ============================================================================
+
+main() {
+    log_info "SES Email Verification"
+    echo ""
+
+    # Check prerequisites
+    require_commands aws
+    check_aws_auth
+
+    # Get email address
+    local email
+    email=$(prompt_input "Enter email address to verify" validate_email)
+    echo ""
+
+    # Check current status
+    local current_status
+    current_status=$(check_verification_status "${email}")
+
+    if [ "${current_status}" = "Success" ]; then
+        log_success "Email already verified: ${email}"
+        exit 0
+    fi
+
+    # Verify email
+    verify_ses_email "${email}"
+
+    echo ""
+    log_success "Verification initiated"
+    echo ""
+    log_info "Check your inbox and click the verification link"
+    echo ""
+    echo "To check status:"
+    echo "  aws ses get-identity-verification-attributes --identities ${email} --region ${AWS_REGION}"
+}
+
+main "$@"

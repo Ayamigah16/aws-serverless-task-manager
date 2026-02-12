@@ -18,20 +18,20 @@ export const amplifyConfig = {
   API: {
     GraphQL: {
       endpoint: process.env.NEXT_PUBLIC_APPSYNC_ENDPOINT || '',
-      region: process.env.NEXT_PUBLIC_AWS_REGION || 'us-east-1',
+      region: process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1',
       defaultAuthMode: 'userPool' as const,
     },
     REST: {
       TaskAPI: {
         endpoint: process.env.NEXT_PUBLIC_API_ENDPOINT || '',
-        region: process.env.NEXT_PUBLIC_AWS_REGION || 'us-east-1',
+        region: process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1',
       },
     },
   },
   Storage: {
     S3: {
       bucket: process.env.NEXT_PUBLIC_S3_BUCKET || '',
-      region: process.env.NEXT_PUBLIC_AWS_REGION || 'us-east-1',
+      region: process.env.NEXT_PUBLIC_AWS_REGION || 'eu-west-1',
     },
   },
 }

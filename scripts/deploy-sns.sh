@@ -1,45 +1,61 @@
 #!/bin/bash
+# Deploy SNS Notification System
+# Deploys SNS infrastructure via Terraform
 
-set -e
+set -euo pipefail
 
-echo "🚀 Deploying SNS notification system..."
+# Source common functions
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=lib/common.sh
+source "${SCRIPT_DIR}/lib/common.sh"
+
+# ============================================================================
+# FUNCTIONS
+# ============================================================================
 
 # Deploy Terraform changes
-echo "📦 Applying Terraform changes..."
-cd terraform
-terraform apply -auto-approve
+deploy_terraform() {
+    log_info "Applying Terraform changes for SNS"
 
-# Get SNS topic ARN
-SNS_TOPIC_ARN=$(terraform output -raw sns_topic_arn 2>/dev/null || echo "")
+    cd "${PROJECT_ROOT}/terraform" || die "Terraform directory not found"
 
-if [ -z "$SNS_TOPIC_ARN" ]; then
-  echo "❌ Failed to get SNS topic ARN"
-  exit 1
-fi
+    terraform apply -auto-approve || die "Terraform apply failed"
 
-echo "✅ SNS Topic ARN: $SNS_TOPIC_ARN"
+    log_success "Infrastructure deployed"
+}
 
-# Deploy notification handler Lambda
-echo "📦 Deploying notification handler Lambda..."
-cd ../lambda/notification-handler
+# ============================================================================
+# MAIN
+# ============================================================================
 
-if [ ! -f function.zip ]; then
-  echo "Creating Lambda deployment package..."
-  zip -r function.zip index.js node_modules/ package*.json > /dev/null
-fi
+main() {
+    log_info "Deploy SNS Notification System"
+    echo ""
 
-FUNCTION_NAME=$(cd ../../terraform && terraform output -raw notification_handler_lambda_name 2>/dev/null || echo "task-manager-sandbox-notification-handler")
+    # Check prerequisites
+    require_commands aws terraform
+    check_aws_auth
 
-aws lambda update-function-code \
-  --function-name "$FUNCTION_NAME" \
-  --zip-file fileb://function.zip \
-  --no-cli-pager
+    # Deploy infrastructure (includes notification-handler Lambda)
+    log_info "Terraform will deploy:"
+    log_info "  • SNS topic and subscriptions"
+    log_info "  • notification-handler Lambda function"
+    log_info "  • EventBridge rules for notifications"
+    echo ""
 
-echo "✅ Lambda deployed successfully"
+    deploy_terraform
 
-echo ""
-echo "🎉 SNS migration complete!"
-echo ""
-echo "⚠️  IMPORTANT: Check your email and confirm SNS subscription"
-echo "   AWS will send a confirmation email to the addresses in notification_emails"
-echo ""
+    # Get SNS topic ARN
+    local sns_topic_arn
+    sns_topic_arn=$(get_terraform_output "sns_topic_arn") || die "Failed to get SNS topic ARN"
+    log_info "SNS Topic: ${sns_topic_arn}"
+
+    echo ""
+    log_success "SNS deployment complete"
+    echo ""
+    log_warn "Check your email to confirm SNS subscriptions"
+    log_info "AWS sends confirmation emails to addresses in notification_emails"
+}
+
+main "$@"
+

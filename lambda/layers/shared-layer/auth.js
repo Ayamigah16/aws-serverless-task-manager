@@ -1,7 +1,7 @@
 const jwt = require('jsonwebtoken');
 const jwksClient = require('jwks-rsa');
 
-const region = process.env.AWS_REGION_NAME || 'eu-west-1';
+const region = process.env.AWS_REGION || process.env.AWS_REGION_NAME || 'eu-west-1';
 const userPoolId = process.env.USER_POOL_ID;
 const issuer = `https://cognito-idp.${region}.amazonaws.com/${userPoolId}`;
 

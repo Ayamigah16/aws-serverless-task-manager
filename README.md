@@ -1,19 +1,45 @@
 # AWS Serverless Task Manager
 
-Production-grade task management system for software engineering teams built on AWS serverless architecture.
+Production-grade task management system for software engineering teams built on AWS serverless architecture with complete CI/CD pipeline.
 
 ## 🚀 Quick Start
 
+### Automated Deployment (Recommended)
+
 ```bash
-# 1. Deploy backend
+# Full stack deployment (Infrastructure + Lambda Functions + Frontend)
+./scripts/deploy.sh --environment sandbox
+
+# Or use CI/CD (push to main/develop)
+git push origin main  # Deploys to production
+git push origin develop  # Deploys to staging
+```
+
+### Component-Specific Deployment
+
+```bash
+# Infrastructure & Lambda functions (Terraform handles both)
+./scripts/deploy.sh --infrastructure-only
+
+# Frontend configuration only
+./scripts/deploy.sh --frontend-only
+
+# Quick deploy (skip pre-build, let Terraform handle it)
+./scripts/deploy.sh --skip-build
+```
+
+### Manual Setup
+
+```bash
+# 1. Deploy backend infrastructure & Lambda functions
 cd terraform && terraform init && terraform apply
+# Note: Terraform automatically builds and deploys all Lambda functions
 
 # 2. Configure frontend
-cd ../frontend && ./scripts/configure.sh
-
-# 3. Start development
-npm install && npm run dev
+./setup-amplify.sh
 ```
+
+**Note**: Lambda functions are now fully managed by Terraform. The deployment script automatically handles building and deploying all functions via `terraform apply`.
 
 ## 📋 Architecture
 
@@ -44,11 +70,23 @@ npm install && npm run dev
 
 ## 📚 Documentation
 
-- [Frontend Guide](./frontend/README.md) - Next.js setup and usage
+### Getting Started
+- [Deployment Checklist](./DEPLOYMENT_CHECKLIST.md) - **Production deployment guide**
+- [Quick Start Guide](./docs/getting-started/README.md) - Complete setup walkthrough
+- [AWS Account Preparation](./docs/getting-started/AWS_ACCOUNT_PREPARATION.md) - Prerequisites
+- [Troubleshooting](./docs/getting-started/TROUBLESHOOTING.md) - Common issues
+
+### Deployment & Operations
+- [Terraform Optimization](./TERRAFORM_OPTIMIZATION.md) - **Lambda deployment via Terraform**
+- [Automated Deployment](./scripts/deploy.sh) - One-command full stack deployment
+- [CI/CD Pipeline](./docs/deployment/CI_CD_GUIDE.md) - GitHub Actions workflows
+- [Scripts Reference](./docs/development/SCRIPTS_REFERENCE.md) - All deployment scripts
+- [Deployment Guide](./docs/deployment/README.md) - Manual deployment procedures
+- [Secrets Configuration](./.github/SECRETS_TEMPLATE.md) - GitHub secrets setup
+
+### Architecture & Development
 - [Integration Guide](./frontend/INTEGRATION.md) - Lambda-Frontend integration
-- [Quick Start](./frontend/QUICKSTART.md) - Fast setup guide
 - [Enhancement Plan](./ENHANCEMENT_PLAN.md) - Feature roadmap
-- [Deployment Guide](./docs/ENHANCED_DEPLOYMENT_GUIDE.md) - Production deployment
 - [Architecture](./docs/architecture/) - System design docs
 
 ## 🔑 Features

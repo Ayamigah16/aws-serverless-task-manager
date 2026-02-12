@@ -1,0 +1,309 @@
+name: Full Stack Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+        - sandbox
+        - staging
+        - production
+      deploy_infrastructure:
+        description: 'Deploy infrastructure (Terraform)'
+        required: true
+        type: boolean
+        default: true
+      deploy_lambdas:
+        description: 'Deploy Lambda functions'
+        required: true
+        type: boolean
+        default: true
+      deploy_frontend:
+        description: 'Deploy frontend'
+        required: true
+        type: boolean
+        default: true
+  push:
+    branches:
+    - main
+    paths-ignore:
+    - '**.md'
+    - 'docs/**'
+
+env:
+  AWS_REGION: 'eu-west-1'
+
+permissions:
+  id-token: write
+  contents: read
+  pull-requests: write
+
+jobs:
+  prepare:
+    name: Prepare Deployment
+    runs-on: ubuntu-latest
+    outputs:
+      environment: ${{ steps.determine-env.outputs.environment }}
+      deploy_infrastructure: ${{ steps.determine-components.outputs.deploy_infrastructure }}
+      deploy_lambdas: ${{ steps.determine-components.outputs.deploy_lambdas }}
+      deploy_frontend: ${{ steps.determine-components.outputs.deploy_frontend }}
+      short_sha: ${{ steps.vars.outputs.short_sha }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+
+    - name: Determine environment
+      id: determine-env
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "environment=${{ inputs.environment }}" >> $GITHUB_OUTPUT
+        elif [ "${{ github.ref }}" == "refs/heads/main" ]; then
+          echo "environment=production" >> $GITHUB_OUTPUT
+        elif [ "${{ github.ref }}" == "refs/heads/develop" ]; then
+          echo "environment=staging" >> $GITHUB_OUTPUT
+        else
+          echo "environment=sandbox" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Determine components to deploy
+      id: determine-components
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          echo "deploy_infrastructure=${{ inputs.deploy_infrastructure }}" >> $GITHUB_OUTPUT
+          echo "deploy_lambdas=${{ inputs.deploy_lambdas }}" >> $GITHUB_OUTPUT
+          echo "deploy_frontend=${{ inputs.deploy_frontend }}" >> $GITHUB_OUTPUT
+        else
+          # Auto-detect based on changed files
+          CHANGED_FILES=$(git diff --name-only HEAD^ HEAD)
+
+          if echo "$CHANGED_FILES" | grep -q '^terraform/'; then
+            echo "deploy_infrastructure=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_infrastructure=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^lambda/'; then
+            echo "deploy_lambdas=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_lambdas=false" >> $GITHUB_OUTPUT
+          fi
+
+          if echo "$CHANGED_FILES" | grep -q '^frontend/'; then
+            echo "deploy_frontend=true" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_frontend=false" >> $GITHUB_OUTPUT
+          fi
+        fi
+
+    - name: Set variables
+      id: vars
+      run: |
+        echo "short_sha=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
+
+    - name: Create deployment notification
+      run: |
+        echo "## 🚀 Deployment Started" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment:** ${{ steps.determine-env.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Infrastructure:** ${{ steps.determine-components.outputs.deploy_infrastructure }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Lambda Functions:** ${{ steps.determine-components.outputs.deploy_lambdas }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Frontend:** ${{ steps.determine-components.outputs.deploy_frontend }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit:** ${{ steps.vars.outputs.short_sha }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Triggered by:** ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
+
+  deploy-infrastructure:
+    name: Deploy Infrastructure
+    needs: prepare
+    if: needs.prepare.outputs.deploy_infrastructure == 'true'
+    uses: ./.github/workflows/terraform-deploy.yml
+    with:
+      environment: ${{ needs.prepare.outputs.environment }}
+      action: apply
+    secrets: inherit
+
+  deploy-lambdas:
+    name: Deploy Lambda Functions
+    needs: [ prepare, deploy-infrastructure ]
+    if: |
+      always() &&
+      needs.prepare.outputs.deploy_lambdas == 'true' &&
+      (needs.deploy-infrastructure.result == 'success' || needs.deploy-infrastructure.result == 'skipped')
+    uses: ./.github/workflows/lambda-deploy.yml
+    with:
+      environment: ${{ needs.prepare.outputs.environment }}
+    secrets: inherit
+
+  deploy-frontend:
+    name: Deploy Frontend
+    needs: [ prepare, deploy-infrastructure ]
+    if: |
+      always() &&
+      needs.prepare.outputs.deploy_frontend == 'true' &&
+      (needs.deploy-infrastructure.result == 'success' || needs.deploy-infrastructure.result == 'skipped')
+    uses: ./.github/workflows/frontend-deploy.yml
+    with:
+      environment: ${{ needs.prepare.outputs.environment }}
+    secrets: inherit
+
+  smoke-tests:
+    name: Run Smoke Tests
+    needs: [ prepare, deploy-lambdas, deploy-frontend ]
+    if: |
+      always() &&
+      (needs.deploy-lambdas.result == 'success' || needs.deploy-lambdas.result == 'skipped') &&
+      (needs.deploy-frontend.result == 'success' || needs.deploy-frontend.result == 'skipped')
+    runs-on: ubuntu-latest
+    environment: ${{ needs.prepare.outputs.environment }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Run smoke tests
+      run: |
+        # Test API Gateway
+        API_URL=$(aws apigateway get-rest-apis --query "items[?name=='task-manager-${{ needs.prepare.outputs.environment }}'].id" --output text)
+        if [ -n "$API_URL" ]; then
+          echo "✓ API Gateway found: $API_URL"
+        else
+          echo "✗ API Gateway not found"
+          exit 1
+        fi
+
+        # Test Lambda functions
+        FUNCTIONS=$(aws lambda list-functions --query "Functions[?starts_with(FunctionName, 'task-manager-${{ needs.prepare.outputs.environment }}')].FunctionName" --output text)
+        FUNCTION_COUNT=$(echo $FUNCTIONS | wc -w)
+        echo "✓ Found $FUNCTION_COUNT Lambda functions"
+
+        # Test DynamoDB table
+        TABLE_NAME="task-manager-${{ needs.prepare.outputs.environment }}-tasks"
+        if aws dynamodb describe-table --table-name $TABLE_NAME > /dev/null 2>&1; then
+          echo "✓ DynamoDB table exists: $TABLE_NAME"
+        else
+          echo "✗ DynamoDB table not found"
+          exit 1
+        fi
+
+    - name: Health check
+      run: |
+        echo "All smoke tests passed ✓"
+
+  deployment-summary:
+    name: Deployment Summary
+    needs:
+    - prepare
+    - deploy-infrastructure
+    - deploy-lambdas
+    - deploy-frontend
+    - smoke-tests
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Determine overall status
+      id: status
+      run: |
+        if [ "${{ needs.smoke-tests.result }}" == "success" ]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "emoji=✅" >> $GITHUB_OUTPUT
+          echo "message=Deployment completed successfully" >> $GITHUB_OUTPUT
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "emoji=🚨" >> $GITHUB_OUTPUT
+          echo "message=Deployment failed" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Create deployment summary
+      run: |
+        echo "## ${{ steps.status.outputs.emoji }} Deployment Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "**Status:** ${{ steps.status.outputs.status }}" >> $GITHUB_STEP_SUMMARY
+        echo "**Environment:** ${{ needs.prepare.outputs.environment }}" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### Component Status" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Infrastructure | ${{ needs.deploy-infrastructure.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Lambda Functions | ${{ needs.deploy-lambdas.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Frontend | ${{ needs.deploy-frontend.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Smoke Tests | ${{ needs.smoke-tests.result }} |" >> $GITHUB_STEP_SUMMARY
+
+    - name: Notify Slack
+      uses: slackapi/slack-github-action@v1
+      with:
+        payload: |
+          {
+            "text": "${{ steps.status.outputs.emoji }} ${{ steps.status.outputs.message }}",
+            "blocks": [
+              {
+                "type": "header",
+                "text": {
+                  "type": "plain_text",
+                  "text": "${{ steps.status.outputs.emoji }} Deployment ${{ steps.status.outputs.status }}"
+                }
+              },
+              {
+                "type": "section",
+                "fields": [
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Environment:*\n${{ needs.prepare.outputs.environment }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Commit:*\n${{ needs.prepare.outputs.short_sha }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Triggered by:*\n${{ github.actor }}"
+                  },
+                  {
+                    "type": "mrkdwn",
+                    "text": "*Branch:*\n${{ github.ref_name }}"
+                  }
+                ]
+              },
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Component Status:*\n• Infrastructure: ${{ needs.deploy-infrastructure.result }}\n• Lambda: ${{ needs.deploy-lambdas.result }}\n• Frontend: ${{ needs.deploy-frontend.result }}\n• Smoke Tests: ${{ needs.smoke-tests.result }}"
+                }
+              },
+              {
+                "type": "actions",
+                "elements": [
+                  {
+                    "type": "button",
+                    "text": {
+                      "type": "plain_text",
+                      "text": "View Workflow"
+                    },
+                    "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                  }
+                ]
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      continue-on-error: true
+
+    - name: Fail if deployment unsuccessful
+      if: steps.status.outputs.status == 'failure'
+      run: exit 1

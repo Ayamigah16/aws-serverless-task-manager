@@ -1,0 +1,150 @@
+name: Lambda Functions Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+        - sandbox
+        - staging
+        - production
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+  push:
+    branches:
+    - main
+    - develop
+    paths:
+    - 'lambda/**'
+    - 'terraform/modules/lambda/**'
+    - '.github/workflows/lambda-deploy.yml'
+
+env:
+  NODE_VERSION: '18.x'
+  AWS_REGION: 'eu-west-1'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  detect-changes:
+    name: Detect Lambda Changes
+    runs-on: ubuntu-latest
+    outputs:
+      lambdas_changed: ${{ steps.check.outputs.changed }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 2
+
+    - name: Check for Lambda changes
+      id: check
+      run: |
+        if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+          # Always deploy on manual trigger
+          echo "changed=true" >> $GITHUB_OUTPUT
+          echo "Manual trigger - deploying all Lambda functions"
+        else
+          # Check if any Lambda code changed
+          changed_files=$(git diff --name-only HEAD^ HEAD | grep -E '^lambda/|^terraform/modules/lambda/' || true)
+          if [ -n "$changed_files" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "Lambda changes detected:"
+            echo "$changed_files"
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+            echo "No Lambda changes detected"
+          fi
+        fi
+
+  deploy-lambdas:
+    name: Deploy Lambda Functions via Terraform
+    runs-on: ubuntu-latest
+    needs: detect-changes
+    if: needs.detect-changes.outputs.lambdas_changed == 'true'
+    environment: ${{ inputs.environment || 'sandbox' }}
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: 'lambda/**/package-lock.json'
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: '~> 1.5'
+
+    - name: Build Lambda Functions
+      run: |
+        echo "Building all Lambda functions..."
+        bash scripts/build-lambdas.sh
+
+    - name: Initialize Terraform
+      working-directory: terraform
+      run: |
+        terraform init -backend-config="key=${{ inputs.environment || 'sandbox' }}/terraform.tfstate"
+
+    - name: Plan Terraform Changes
+      working-directory: terraform
+      run: |
+        terraform plan -out=tfplan
+        
+    - name: Apply Terraform Changes
+      working-directory: terraform
+      run: |
+        echo "Deploying Lambda functions via Terraform..."
+        terraform apply -auto-approve tfplan
+
+    - name: Verify Deployment
+      run: |
+        echo "Verifying Lambda deployments..."
+        # List deployed functions
+        aws lambda list-functions \
+          --query 'Functions[?starts_with(FunctionName, `task-manager-${{ inputs.environment || 'sandbox' }}`)].FunctionName' \
+          --output table
+
+    - name: Deployment Summary
+      if: success()
+      run: |
+        echo "✅ Lambda Functions Deployed Successfully"
+        echo ""
+        echo "Deployment Method: Terraform (automated)"
+        echo "Environment: ${{ inputs.environment || 'sandbox' }}"
+        echo "Region: ${{ env.AWS_REGION }}"
+        echo ""
+        echo "All Lambda functions have been:"
+        echo "  • Built from source"
+        echo "  • Packaged with dependencies"
+        echo "  • Deployed via Terraform"
+        echo "  • Configured with correct IAM roles and environment variables"
+
+    - name: Deployment Failed
+      if: failure()
+      run: |
+        echo "❌ Lambda Deployment Failed"
+        echo ""
+        echo "Please check the logs above for details."
+        echo "Common issues:"
+        echo "  • Build failures in Lambda function code"
+        echo "  • Terraform state lock conflicts"
+        echo "  • AWS permission issues"
+        echo "  • Invalid Terraform configurations"

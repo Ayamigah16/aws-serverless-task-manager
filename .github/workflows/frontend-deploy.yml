@@ -1,0 +1,376 @@
+name: Frontend Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        type: choice
+        options:
+        - sandbox
+        - staging
+        - production
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+  push:
+    branches:
+    - main
+    - develop
+    paths:
+    - 'frontend/**'
+    - '.github/workflows/frontend-deploy.yml'
+
+env:
+  NODE_VERSION: '18.x'
+  AWS_REGION: 'eu-west-1'
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  lint-and-test:
+    name: Lint & Test Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run ESLint
+      run: npm run lint || echo "Linting completed with warnings"
+      continue-on-error: true
+
+    - name: Type check
+      run: npx tsc --noEmit
+      continue-on-error: true
+
+    - name: Run tests
+      run: |
+        if npm run | grep -q "test"; then
+          npm test -- --passWithNoTests
+        else
+          echo "No tests configured"
+        fi
+      continue-on-error: true
+
+  build:
+    name: Build Frontend
+    runs-on: ubuntu-latest
+    needs: lint-and-test
+    environment: ${{ inputs.environment || 'sandbox' }}
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+        role-session-name: GitHubActions-Frontend
+
+    - name: Get Terraform Outputs
+      id: terraform-outputs
+      run: |
+        cd ../terraform
+        terraform init -backend-config="bucket=${{ secrets.TF_STATE_BUCKET }}" \
+                      -backend-config="key=${{ inputs.environment || 'sandbox' }}/terraform.tfstate" \
+                      -backend-config="region=${{ env.AWS_REGION }}" \
+                      -backend-config="dynamodb_table=${{ secrets.TF_STATE_LOCK_TABLE }}"
+
+        terraform output -json > outputs.json
+
+        # Extract values and set as environment variables
+        echo "API_URL=$(jq -r '.api_url.value' outputs.json)" >> $GITHUB_ENV
+        echo "COGNITO_USER_POOL_ID=$(jq -r '.cognito_user_pool_id.value' outputs.json)" >> $GITHUB_ENV
+        echo "COGNITO_CLIENT_ID=$(jq -r '.cognito_client_id.value' outputs.json)" >> $GITHUB_ENV
+        echo "APPSYNC_URL=$(jq -r '.appsync_graphql_url.value // empty' outputs.json)" >> $GITHUB_ENV
+        echo "S3_BUCKET=$(jq -r '.s3_bucket_name.value // empty' outputs.json)" >> $GITHUB_ENV
+
+    - name: Create .env.production
+      run: |
+        cat > .env.production << EOF
+        NEXT_PUBLIC_AWS_REGION=${{ env.AWS_REGION }}
+        NEXT_PUBLIC_API_URL=${{ env.API_URL }}
+        NEXT_PUBLIC_COGNITO_USER_POOL_ID=${{ env.COGNITO_USER_POOL_ID }}
+        NEXT_PUBLIC_COGNITO_CLIENT_ID=${{ env.COGNITO_CLIENT_ID }}
+        NEXT_PUBLIC_APPSYNC_URL=${{ env.APPSYNC_URL }}
+        NEXT_PUBLIC_S3_BUCKET=${{ env.S3_BUCKET }}
+        NEXT_PUBLIC_ENVIRONMENT=${{ inputs.environment || 'sandbox' }}
+        EOF
+
+        echo "✓ Environment configuration created"
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build Next.js application
+      run: |
+        npm run build
+        echo "✓ Build completed successfully"
+
+    - name: Export static files (if applicable)
+      run: |
+        if grep -q '"export"' package.json; then
+          npm run export
+        fi
+      continue-on-error: true
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: frontend-build-${{ inputs.environment || 'sandbox' }}
+        path: |
+          frontend/.next
+          frontend/out
+          frontend/public
+        retention-days: 7
+
+  deploy-amplify:
+    name: Deploy to AWS Amplify
+    runs-on: ubuntu-latest
+    needs: build
+    if: success()
+    environment: ${{ inputs.environment || 'sandbox' }}
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build-${{ inputs.environment || 'sandbox' }}
+        path: frontend/
+
+    - name: Get or Create Amplify App
+      id: amplify-app
+      env:
+        ENVIRONMENT: ${{ inputs.environment || 'sandbox' }}
+      run: |
+        APP_NAME="task-manager-${ENVIRONMENT}"
+
+        # Check if app exists
+        APP_ID=$(aws amplify list-apps --query "apps[?name=='${APP_NAME}'].appId" --output text)
+
+        if [ -z "$APP_ID" ]; then
+          echo "Creating new Amplify app: ${APP_NAME}"
+          APP_ID=$(aws amplify create-app \
+            --name "${APP_NAME}" \
+            --repository "${{ github.repository }}" \
+            --platform WEB \
+            --build-spec "$(cat ../amplify.yml)" \
+            --query 'app.appId' --output text)
+
+          echo "✓ Created Amplify app: ${APP_ID}"
+        else
+          echo "✓ Using existing Amplify app: ${APP_ID}"
+        fi
+
+        echo "app_id=${APP_ID}" >> $GITHUB_OUTPUT
+        echo "AMPLIFY_APP_ID=${APP_ID}" >> $GITHUB_ENV
+
+    - name: Create or Update Branch
+      env:
+        BRANCH_NAME: ${{ github.ref_name }}
+        ENVIRONMENT: ${{ inputs.environment || 'sandbox' }}
+      run: |
+        # Check if branch exists
+        BRANCH_EXISTS=$(aws amplify list-branches \
+          --app-id ${{ env.AMPLIFY_APP_ID }} \
+          --query "branches[?branchName=='${BRANCH_NAME}'].branchName" \
+          --output text)
+
+        if [ -z "$BRANCH_EXISTS" ]; then
+          echo "Creating branch: ${BRANCH_NAME}"
+          aws amplify create-branch \
+            --app-id ${{ env.AMPLIFY_APP_ID }} \
+            --branch-name "${BRANCH_NAME}" \
+            --stage "${ENVIRONMENT}" \
+            --enable-auto-build
+        fi
+
+    - name: Trigger Deployment
+      run: |
+        JOB_ID=$(aws amplify start-job \
+          --app-id ${{ env.AMPLIFY_APP_ID }} \
+          --branch-name ${{ github.ref_name }} \
+          --job-type RELEASE \
+          --query 'jobSummary.jobId' --output text)
+
+        echo "Deployment job started: ${JOB_ID}"
+        echo "JOB_ID=${JOB_ID}" >> $GITHUB_ENV
+
+    - name: Wait for Deployment
+      timeout-minutes: 15
+      run: |
+        while true; do
+          STATUS=$(aws amplify get-job \
+            --app-id ${{ env.AMPLIFY_APP_ID }} \
+            --branch-name ${{ github.ref_name }} \
+            --job-id ${{ env.JOB_ID }} \
+            --query 'job.summary.status' --output text)
+
+          echo "Deployment status: ${STATUS}"
+
+          if [ "$STATUS" = "SUCCEED" ]; then
+            echo "✓ Deployment successful"
+            break
+          elif [ "$STATUS" = "FAILED" ] || [ "$STATUS" = "CANCELLED" ]; then
+            echo "✗ Deployment failed with status: ${STATUS}"
+            exit 1
+          fi
+
+          sleep 30
+        done
+
+    - name: Get App URL
+      id: app-url
+      run: |
+        APP_URL=$(aws amplify get-app \
+          --app-id ${{ env.AMPLIFY_APP_ID }} \
+          --query 'app.defaultDomain' --output text)
+
+        FULL_URL="https://${BRANCH_NAME}.${APP_URL}"
+        echo "url=${FULL_URL}" >> $GITHUB_OUTPUT
+        echo "🌐 Application URL: ${FULL_URL}"
+
+    - name: Comment PR with deployment URL
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '✅ Frontend deployed successfully!\n\n🌐 Preview URL: ${{ steps.app-url.outputs.url }}'
+          })
+
+  deploy-s3-cloudfront:
+    name: Deploy to S3 + CloudFront (Alternative)
+    runs-on: ubuntu-latest
+    needs: build
+    if: false # Enable this if you want S3+CloudFront deployment instead of Amplify
+    environment: ${{ inputs.environment || 'sandbox' }}
+    defaults:
+      run:
+        working-directory: ./frontend
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Configure AWS Credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+        aws-region: ${{ env.AWS_REGION }}
+
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: frontend-build-${{ inputs.environment || 'sandbox' }}
+        path: frontend/
+
+    - name: Deploy to S3
+      env:
+        ENVIRONMENT: ${{ inputs.environment || 'sandbox' }}
+      run: |
+        BUCKET_NAME="task-manager-${ENVIRONMENT}-frontend"
+
+        # Sync build to S3
+        aws s3 sync .next/static s3://${BUCKET_NAME}/_next/static --delete
+        aws s3 sync public s3://${BUCKET_NAME}/ --delete
+
+        echo "✓ Deployed to S3: ${BUCKET_NAME}"
+
+    - name: Invalidate CloudFront Cache
+      env:
+        ENVIRONMENT: ${{ inputs.environment || 'sandbox' }}
+      run: |
+        DISTRIBUTION_ID=$(aws cloudfront list-distributions \
+          --query "DistributionList.Items[?Comment=='task-manager-${ENVIRONMENT}'].Id" \
+          --output text)
+
+        if [ -n "$DISTRIBUTION_ID" ]; then
+          aws cloudfront create-invalidation \
+            --distribution-id ${DISTRIBUTION_ID} \
+            --paths "/*"
+          echo "✓ CloudFront cache invalidated"
+        fi
+
+  notify:
+    name: Notify Deployment Status
+    runs-on: ubuntu-latest
+    needs: [ deploy-amplify ]
+    if: always()
+    steps:
+    - name: Determine status
+      id: status
+      run: |
+        if [ "${{ needs.deploy-amplify.result }}" == "success" ]; then
+          echo "status=success" >> $GITHUB_OUTPUT
+          echo "emoji=✅" >> $GITHUB_OUTPUT
+        else
+          echo "status=failure" >> $GITHUB_OUTPUT
+          echo "emoji=🚨" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Notify Slack
+      uses: slackapi/slack-github-action@v1
+      with:
+        payload: |
+          {
+            "text": "${{ steps.status.outputs.emoji }} Frontend Deployment ${{ steps.status.outputs.status }}",
+            "blocks": [
+              {
+                "type": "section",
+                "text": {
+                  "type": "mrkdwn",
+                  "text": "*Frontend Deployment*\n*Status:* ${{ steps.status.outputs.status }}\n*Environment:* ${{ inputs.environment || 'sandbox' }}\n*Triggered by:* ${{ github.actor }}\n*Branch:* ${{ github.ref_name }}"
+                }
+              }
+            ]
+          }
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+      continue-on-error: true

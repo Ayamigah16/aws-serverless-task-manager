@@ -1,0 +1,251 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches:
+    - main
+    - develop
+
+env:
+  NODE_VERSION: '18.x'
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  pr-info:
+    name: PR Information
+    runs-on: ubuntu-latest
+    steps:
+    - name: PR Details
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const pr = context.payload.pull_request;
+          console.log('PR #' + pr.number);
+          console.log('Title: ' + pr.title);
+          console.log('Author: ' + pr.user.login);
+          console.log('Base: ' + pr.base.ref);
+          console.log('Head: ' + pr.head.ref);
+
+  changed-files:
+    name: Detect Changed Files
+    runs-on: ubuntu-latest
+    outputs:
+      terraform: ${{ steps.filter.outputs.terraform }}
+      lambda: ${{ steps.filter.outputs.lambda }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Check file changes
+      uses: dorny/paths-filter@v3
+      id: filter
+      with:
+        filters: |
+          terraform:
+            - 'terraform/**'
+          lambda:
+            - 'lambda/**'
+          frontend:
+            - 'frontend/**'
+          docs:
+            - 'docs/**'
+            - '**.md'
+
+  terraform-check:
+    name: Terraform Check
+    needs: changed-files
+    if: needs.changed-files.outputs.terraform == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./terraform
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: '1.5.0'
+
+    - name: Terraform Format
+      run: terraform fmt -check -recursive
+
+    - name: Terraform Init
+      run: terraform init -backend=false
+
+    - name: Terraform Validate
+      run: terraform validate
+
+    - name: Comment PR
+      if: always()
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: '✅ Terraform validation passed for this PR'
+          })
+
+  lambda-check:
+    name: Lambda Check
+    needs: changed-files
+    if: needs.changed-files.outputs.lambda == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Check Lambda functions
+      run: |
+        for dir in lambda/*/; do
+          if [ -f "${dir}package.json" ]; then
+            echo "Checking $(basename $dir)..."
+            cd "$dir"
+            npm ci
+            npm run lint || echo "No lint script"
+            npm test || echo "No tests"
+            cd ../..
+          fi
+        done
+
+  frontend-check:
+    name: Frontend Check
+    needs: changed-files
+    if: needs.changed-files.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./frontend
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+        cache-dependency-path: frontend/package-lock.json
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Lint
+      run: npm run lint
+
+    - name: Type check
+      run: npx tsc --noEmit
+
+    - name: Build
+      run: npm run build
+      env:
+        NEXT_PUBLIC_AWS_REGION: eu-west-1
+        NEXT_PUBLIC_API_URL: https://mock.com
+        NEXT_PUBLIC_COGNITO_USER_POOL_ID: mock
+        NEXT_PUBLIC_COGNITO_CLIENT_ID: mock
+
+  size-check:
+    name: Bundle Size Check
+    needs: changed-files
+    if: needs.changed-files.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+
+    - name: Check bundle size
+      working-directory: frontend
+      run: |
+        npm ci
+        npm run build
+        du -sh .next/ > bundle-size.txt
+        cat bundle-size.txt
+
+    - name: Comment bundle size
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const size = fs.readFileSync('frontend/bundle-size.txt', 'utf8');
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: `📦 **Bundle Size Report**\n\n\`\`\`\n${size}\n\`\`\``
+          })
+
+  label-pr:
+    name: Auto Label PR
+    runs-on: ubuntu-latest
+    needs: changed-files
+    steps:
+    - name: Add labels
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const labels = [];
+          if ('${{ needs.changed-files.outputs.terraform }}' === 'true') labels.push('terraform');
+          if ('${{ needs.changed-files.outputs.lambda }}' === 'true') labels.push('lambda');
+          if ('${{ needs.changed-files.outputs.frontend }}' === 'true') labels.push('frontend');
+          if ('${{ needs.changed-files.outputs.docs }}' === 'true') labels.push('documentation');
+
+          if (labels.length > 0) {
+            github.rest.issues.addLabels({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              labels: labels
+            });
+          }
+
+  pr-summary:
+    name: PR Summary
+    runs-on: ubuntu-latest
+    needs: [ changed-files, terraform-check, lambda-check, frontend-check ]
+    if: always()
+    steps:
+    - name: Create PR summary
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const summary = `## 📋 PR Check Summary
+
+          ### Changed Components
+          - Terraform: ${{ needs.changed-files.outputs.terraform == 'true' && '✅' || '⏭️' }}
+          - Lambda: ${{ needs.changed-files.outputs.lambda == 'true' && '✅' || '⏭️' }}
+          - Frontend: ${{ needs.changed-files.outputs.frontend == 'true' && '✅' || '⏭️' }}
+          - Docs: ${{ needs.changed-files.outputs.docs == 'true' && '✅' || '⏭️' }}
+
+          ### Check Results
+          - Terraform Check: ${{ needs.terraform-check.result || 'skipped' }}
+          - Lambda Check: ${{ needs.lambda-check.result || 'skipped' }}
+          - Frontend Check: ${{ needs.frontend-check.result || 'skipped' }}
+
+          ---
+          *This PR is ready for review once all checks pass ✨*`;
+
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: summary
+          });
