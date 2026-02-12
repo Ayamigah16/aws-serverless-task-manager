@@ -12,7 +12,6 @@ frontend:
       - npm --version
     build:
       commands:
-      - cd frontend
       - echo "Environment variables check..."
       - |
         if [ -z "$NEXT_PUBLIC_COGNITO_USER_POOL_ID" ]; then
