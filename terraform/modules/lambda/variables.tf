@@ -62,3 +62,25 @@ variable "sns_topic_arn" {
   description = "SNS topic ARN for notifications"
   type        = string
 }
+
+variable "s3_bucket_name" {
+  description = "S3 bucket name for file uploads"
+  type        = string
+}
+
+variable "s3_bucket_arn" {
+  description = "S3 bucket ARN for file uploads"
+  type        = string
+}
+
+variable "opensearch_endpoint" {
+  description = "OpenSearch endpoint URL"
+  type        = string
+  default     = ""
+}
+
+variable "opensearch_collection_arn" {
+  description = "OpenSearch collection ARN"
+  type        = string
+  default     = ""
+}

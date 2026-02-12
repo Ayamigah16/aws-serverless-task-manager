@@ -9,7 +9,7 @@ cost_center  = "engineering"
 
 # IMPORTANT: Set these values before deployment
 admin_email         = "admin@amalitech.com"
-notification_emails = ["admin@amalitech.com"]  # Optional: Admins who receive all notifications. Members auto-subscribe on signup.
+notification_emails = ["admin@amalitech.com"] # Optional: Admins who receive all notifications. Members auto-subscribe on signup.
 
 # Email Domain Restrictions
 allowed_email_domains = ["amalitech.com", "amalitechtraining.org"]

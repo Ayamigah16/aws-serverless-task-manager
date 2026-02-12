@@ -42,3 +42,53 @@ output "appsync_resolver_lambda_name" {
   description = "AppSync Resolver Lambda name"
   value       = aws_lambda_function.appsync_resolver.function_name
 }
+
+output "users_api_lambda_arn" {
+  description = "Users API Lambda ARN"
+  value       = aws_lambda_function.users_api.arn
+}
+
+output "users_api_lambda_name" {
+  description = "Users API Lambda name"
+  value       = aws_lambda_function.users_api.function_name
+}
+
+output "stream_processor_lambda_arn" {
+  description = "Stream Processor Lambda ARN"
+  value       = aws_lambda_function.stream_processor.arn
+}
+
+output "stream_processor_lambda_name" {
+  description = "Stream Processor Lambda name"
+  value       = aws_lambda_function.stream_processor.function_name
+}
+
+output "file_processor_lambda_arn" {
+  description = "File Processor Lambda ARN"
+  value       = aws_lambda_function.file_processor.arn
+}
+
+output "file_processor_lambda_name" {
+  description = "File Processor Lambda name"
+  value       = aws_lambda_function.file_processor.function_name
+}
+
+output "presigned_url_lambda_arn" {
+  description = "Presigned URL Lambda ARN"
+  value       = aws_lambda_function.presigned_url.arn
+}
+
+output "presigned_url_lambda_name" {
+  description = "Presigned URL Lambda name"
+  value       = aws_lambda_function.presigned_url.function_name
+}
+
+output "github_webhook_lambda_arn" {
+  description = "GitHub Webhook Lambda ARN"
+  value       = aws_lambda_function.github_webhook.arn
+}
+
+output "github_webhook_lambda_name" {
+  description = "GitHub Webhook Lambda name"
+  value       = aws_lambda_function.github_webhook.function_name
+}

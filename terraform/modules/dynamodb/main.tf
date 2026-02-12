@@ -1,8 +1,8 @@
 resource "aws_dynamodb_table" "main" {
-  name           = var.table_name
-  billing_mode   = var.billing_mode
-  hash_key       = "PK"   # Partition Key
-  range_key      = "SK"   # Sort Key
+  name         = var.table_name
+  billing_mode = var.billing_mode
+  hash_key     = "PK" # Partition Key
+  range_key    = "SK" # Sort Key
 
   attribute {
     name = "PK"

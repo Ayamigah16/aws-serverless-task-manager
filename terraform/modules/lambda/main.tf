@@ -1,3 +1,33 @@
+# ============================================================================
+# BUILD AUTOMATION
+# ============================================================================
+
+# Build Lambda functions and layer before deployment
+resource "null_resource" "build_lambdas" {
+  triggers = {
+    # Rebuild when any Lambda source changes
+    pre_signup_trigger   = filesha256("${path.module}/../../../lambda/pre-signup-trigger/index.js")
+    task_api             = filesha256("${path.module}/../../../lambda/task-api/index.js")
+    users_api            = filesha256("${path.module}/../../../lambda/users-api/index.js")
+    notification_handler = filesha256("${path.module}/../../../lambda/notification-handler/index.js")
+    appsync_resolver     = filesha256("${path.module}/../../../lambda/appsync-resolver/index.js")
+    stream_processor     = filesha256("${path.module}/../../../lambda/stream-processor/index.js")
+    file_processor       = filesha256("${path.module}/../../../lambda/file-processor/index.js")
+    presigned_url        = filesha256("${path.module}/../../../lambda/presigned-url/index.js")
+    github_webhook       = filesha256("${path.module}/../../../lambda/github-webhook/index.js")
+    build_script         = filesha256("${path.module}/../../../scripts/build-lambdas.sh")
+  }
+
+  provisioner "local-exec" {
+    command     = "bash ${path.module}/../../../scripts/build-lambdas.sh"
+    working_dir = path.module
+  }
+}
+
+# ============================================================================
+# SHARED LAMBDA LAYER
+# ============================================================================
+
 # Lambda Layer for shared code
 resource "aws_lambda_layer_version" "shared" {
   filename            = "${path.module}/../../../lambda/layers/shared-layer.zip"
@@ -5,6 +35,8 @@ resource "aws_lambda_layer_version" "shared" {
   compatible_runtimes = [var.runtime]
   description         = "Shared utilities for Lambda functions"
   source_code_hash    = filebase64sha256("${path.module}/../../../lambda/layers/shared-layer.zip")
+
+  depends_on = [null_resource.build_lambdas]
 }
 
 # Pre Sign-Up Lambda
@@ -31,8 +63,8 @@ resource "aws_iam_role_policy" "pre_signup" {
     Version = "2012-10-17"
     Statement = [
       {
-        Effect = "Allow"
-        Action = "sns:Subscribe"
+        Effect   = "Allow"
+        Action   = "sns:Subscribe"
         Resource = var.sns_topic_arn
       }
     ]
@@ -60,6 +92,8 @@ resource "aws_lambda_function" "pre_signup" {
       SNS_TOPIC_ARN   = var.sns_topic_arn
     }
   }
+
+  depends_on = [null_resource.build_lambdas]
 
   tracing_config {
     mode = "Active"
@@ -104,8 +138,8 @@ resource "aws_iam_role_policy" "task_api" {
         ]
       },
       {
-        Effect = "Allow"
-        Action = "events:PutEvents"
+        Effect   = "Allow"
+        Action   = "events:PutEvents"
         Resource = var.eventbridge_bus_arn
       },
       {
@@ -156,6 +190,8 @@ resource "aws_lambda_function" "task_api" {
   tracing_config {
     mode = "Active"
   }
+
+  depends_on = [null_resource.build_lambdas]
 }
 
 # Notification Handler Lambda
@@ -193,13 +229,13 @@ resource "aws_iam_role_policy" "notification_handler" {
         ]
       },
       {
-        Effect = "Allow"
-        Action = "sns:Publish"
+        Effect   = "Allow"
+        Action   = "sns:Publish"
         Resource = var.sns_topic_arn
       },
       {
-        Effect = "Allow"
-        Action = "cognito-idp:AdminGetUser"
+        Effect   = "Allow"
+        Action   = "cognito-idp:AdminGetUser"
         Resource = "arn:aws:cognito-idp:${var.aws_region}:*:userpool/*"
       },
       {
@@ -242,6 +278,8 @@ resource "aws_lambda_function" "notification_handler" {
   tracing_config {
     mode = "Active"
   }
+
+  depends_on = [null_resource.build_lambdas]
 }
 
 # CloudWatch Log Groups
@@ -303,8 +341,8 @@ resource "aws_iam_role_policy" "appsync_resolver" {
         ]
       },
       {
-        Effect = "Allow"
-        Action = "events:PutEvents"
+        Effect   = "Allow"
+        Action   = "events:PutEvents"
         Resource = var.eventbridge_bus_arn
       },
       {
@@ -347,4 +385,433 @@ resource "aws_lambda_function" "appsync_resolver" {
   tracing_config {
     mode = "Active"
   }
+
+  depends_on = [null_resource.build_lambdas]
+}
+
+# ============================================================================
+# USERS API LAMBDA
+# ============================================================================
+
+resource "aws_iam_role" "users_api" {
+  name = "${var.name_prefix}-users-api-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "users_api" {
+  name = "${var.name_prefix}-users-api-policy"
+  role = aws_iam_role.users_api.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "cognito-idp:ListUsers",
+          "cognito-idp:AdminListGroupsForUser"
+        ]
+        Resource = "arn:aws:cognito-idp:${var.aws_region}:*:userpool/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "users_api_basic" {
+  role       = aws_iam_role.users_api.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_lambda_function" "users_api" {
+  filename         = "${path.module}/../../../lambda/users-api/function.zip"
+  function_name    = "${var.name_prefix}-users-api"
+  role             = aws_iam_role.users_api.arn
+  handler          = "index.handler"
+  runtime          = var.runtime
+  timeout          = var.timeout
+  memory_size      = var.memory_size
+  layers           = [aws_lambda_layer_version.shared.arn]
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/users-api/function.zip")
+
+  environment {
+    variables = {
+      USER_POOL_ID    = var.cognito_user_pool_id
+      AWS_REGION_NAME = var.aws_region
+    }
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  depends_on = [null_resource.build_lambdas]
+}
+
+resource "aws_cloudwatch_log_group" "users_api" {
+  name              = "/aws/lambda/${aws_lambda_function.users_api.function_name}"
+  retention_in_days = 30
+}
+
+# ============================================================================
+# STREAM PROCESSOR LAMBDA
+# ============================================================================
+
+resource "aws_iam_role" "stream_processor" {
+  name = "${var.name_prefix}-stream-processor-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "stream_processor" {
+  name = "${var.name_prefix}-stream-processor-policy"
+  role = aws_iam_role.stream_processor.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:DescribeStream",
+          "dynamodb:GetRecords",
+          "dynamodb:GetShardIterator",
+          "dynamodb:ListStreams"
+        ]
+        Resource = "${var.dynamodb_table_arn}/stream/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "aoss:*"
+        ]
+        Resource = var.opensearch_collection_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "stream_processor_basic" {
+  role       = aws_iam_role.stream_processor.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_lambda_function" "stream_processor" {
+  filename         = "${path.module}/../../../lambda/stream-processor/function.zip"
+  function_name    = "${var.name_prefix}-stream-processor"
+  role             = aws_iam_role.stream_processor.arn
+  handler          = "index.handler"
+  runtime          = var.runtime
+  timeout          = 60
+  memory_size      = 512
+  layers           = [aws_lambda_layer_version.shared.arn]
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/stream-processor/function.zip")
+
+  environment {
+    variables = {
+      OPENSEARCH_ENDPOINT = var.opensearch_endpoint
+      AWS_REGION          = var.aws_region
+    }
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  depends_on = [null_resource.build_lambdas]
+}
+
+resource "aws_cloudwatch_log_group" "stream_processor" {
+  name              = "/aws/lambda/${aws_lambda_function.stream_processor.function_name}"
+  retention_in_days = 30
+}
+
+# ============================================================================
+# FILE PROCESSOR LAMBDA
+# ============================================================================
+
+resource "aws_iam_role" "file_processor" {
+  name = "${var.name_prefix}-file-processor-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "file_processor" {
+  name = "${var.name_prefix}-file-processor-policy"
+  role = aws_iam_role.file_processor.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "${var.s3_bucket_arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:PutItem"
+        ]
+        Resource = var.dynamodb_table_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "file_processor_basic" {
+  role       = aws_iam_role.file_processor.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_lambda_function" "file_processor" {
+  filename         = "${path.module}/../../../lambda/file-processor/function.zip"
+  function_name    = "${var.name_prefix}-file-processor"
+  role             = aws_iam_role.file_processor.arn
+  handler          = "index.handler"
+  runtime          = var.runtime
+  timeout          = 30
+  memory_size      = 512
+  layers           = [aws_lambda_layer_version.shared.arn]
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/file-processor/function.zip")
+
+  environment {
+    variables = {
+      TABLE_NAME = var.dynamodb_table_name
+    }
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  depends_on = [null_resource.build_lambdas]
+}
+
+resource "aws_cloudwatch_log_group" "file_processor" {
+  name              = "/aws/lambda/${aws_lambda_function.file_processor.function_name}"
+  retention_in_days = 30
+}
+
+# ============================================================================
+# PRESIGNED URL LAMBDA
+# ============================================================================
+
+resource "aws_iam_role" "presigned_url" {
+  name = "${var.name_prefix}-presigned-url-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "presigned_url" {
+  name = "${var.name_prefix}-presigned-url-policy"
+  role = aws_iam_role.presigned_url.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "s3:GetObject",
+          "s3:PutObject"
+        ]
+        Resource = "${var.s3_bucket_arn}/*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "presigned_url_basic" {
+  role       = aws_iam_role.presigned_url.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_lambda_function" "presigned_url" {
+  filename         = "${path.module}/../../../lambda/presigned-url/function.zip"
+  function_name    = "${var.name_prefix}-presigned-url"
+  role             = aws_iam_role.presigned_url.arn
+  handler          = "index.handler"
+  runtime          = var.runtime
+  timeout          = var.timeout
+  memory_size      = var.memory_size
+  layers           = [aws_lambda_layer_version.shared.arn]
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/presigned-url/function.zip")
+
+  environment {
+    variables = {
+      BUCKET_NAME = var.s3_bucket_name
+    }
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  depends_on = [null_resource.build_lambdas]
+}
+
+resource "aws_cloudwatch_log_group" "presigned_url" {
+  name              = "/aws/lambda/${aws_lambda_function.presigned_url.function_name}"
+  retention_in_days = 30
+}
+
+# ============================================================================
+# GITHUB WEBHOOK LAMBDA
+# ============================================================================
+
+resource "aws_iam_role" "github_webhook" {
+  name = "${var.name_prefix}-github-webhook-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Action = "sts:AssumeRole"
+      Effect = "Allow"
+      Principal = {
+        Service = "lambda.amazonaws.com"
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "github_webhook" {
+  name = "${var.name_prefix}-github-webhook-policy"
+  role = aws_iam_role.github_webhook.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect = "Allow"
+        Action = [
+          "dynamodb:Query",
+          "dynamodb:UpdateItem"
+        ]
+        Resource = [
+          var.dynamodb_table_arn,
+          "${var.dynamodb_table_arn}/index/*"
+        ]
+      },
+      {
+        Effect   = "Allow"
+        Action   = "events:PutEvents"
+        Resource = var.eventbridge_bus_arn
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "xray:PutTraceSegments",
+          "xray:PutTelemetryRecords"
+        ]
+        Resource = "*"
+      }
+    ]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "github_webhook_basic" {
+  role       = aws_iam_role.github_webhook.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+resource "aws_lambda_function" "github_webhook" {
+  filename         = "${path.module}/../../../lambda/github-webhook/function.zip"
+  function_name    = "${var.name_prefix}-github-webhook"
+  role             = aws_iam_role.github_webhook.arn
+  handler          = "index.handler"
+  runtime          = var.runtime
+  timeout          = var.timeout
+  memory_size      = var.memory_size
+  layers           = [aws_lambda_layer_version.shared.arn]
+  source_code_hash = filebase64sha256("${path.module}/../../../lambda/github-webhook/function.zip")
+
+  environment {
+    variables = {
+      TABLE_NAME     = var.dynamodb_table_name
+      EVENT_BUS_NAME = var.eventbridge_bus_name
+    }
+  }
+
+  tracing_config {
+    mode = "Active"
+  }
+
+  depends_on = [null_resource.build_lambdas]
+}
+
+resource "aws_cloudwatch_log_group" "github_webhook" {
+  name              = "/aws/lambda/${aws_lambda_function.github_webhook.function_name}"
+  retention_in_days = 30
 }

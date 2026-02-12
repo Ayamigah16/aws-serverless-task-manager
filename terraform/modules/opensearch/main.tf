@@ -34,7 +34,7 @@ resource "aws_opensearchserverless_access_policy" "data" {
         "aoss:UpdateCollectionItems",
         "aoss:DescribeCollectionItems"
       ]
-    }, {
+      }, {
       ResourceType = "index"
       Resource     = ["index/${var.collection_name}/*"]
       Permission = [
