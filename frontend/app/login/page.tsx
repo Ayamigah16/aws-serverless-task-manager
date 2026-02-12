@@ -34,7 +34,7 @@ export default function LoginPage() {
 
     try {
       const result = await signIn({ username: email, password })
-      
+
       if (result.isSignedIn) {
         toast.success('Login successful')
         await fetchUser()

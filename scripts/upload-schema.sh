@@ -42,7 +42,7 @@ main() {
 
     # Get AppSync API ID
     local api_id
-    api_id=$(get_terraform_output "appsync_graphql_api_id")
+    api_id=$(get_terraform_output "appsync_api_id")
     [ -z "$api_id" ] && die "AppSync API not deployed. Run 'terraform apply' first."
 
     # Upload schema

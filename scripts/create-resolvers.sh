@@ -81,7 +81,7 @@ main() {
 
     # Get AppSync API ID
     local api_id
-    api_id=$(get_terraform_output "appsync_graphql_api_id")
+    api_id=$(get_terraform_output "appsync_api_id")
     [ -z "$api_id" ] && die "AppSync API not found"
 
     log_info "API ID: $api_id"
@@ -94,4 +94,3 @@ main() {
 }
 
 main "$@"
-echo "  aws appsync list-resolvers --api-id $API_ID --type-name Query"

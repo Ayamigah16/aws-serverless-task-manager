@@ -98,7 +98,6 @@ jobs:
       if: inputs.action == 'plan' || inputs.action == 'apply'
       run: |
         terraform plan \
-          -var-file="environments/${{ inputs.environment }}.tfvars" \
           -var="environment=${{ inputs.environment }}" \
           -out=tfplan \
           -no-color
@@ -148,7 +147,6 @@ jobs:
       if: inputs.action == 'destroy'
       run: |
         terraform destroy \
-          -var-file="environments/${{ inputs.environment }}.tfvars" \
           -var="environment=${{ inputs.environment }}" \
           -auto-approve
 

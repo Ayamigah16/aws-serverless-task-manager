@@ -48,7 +48,6 @@ terraform/.terraform.lock.hcl
 terraform/terraform.tfstate
 terraform/terraform.tfstate.backup
 terraform/*.tfvars
-!terraform/environments/*.tfvars
 *.tfstate
 *.tfstate.*
 .terraform.lock.hcl
