@@ -7,6 +7,8 @@
     "setup": "cd terraform && terraform init && cd ../frontend && npm install",
     "deploy:backend": "cd terraform && terraform apply -auto-approve",
     "deploy:frontend": "cd frontend && npm run build && amplify publish",
+    "setup:github-secret": "./scripts/create-github-secret.sh",
+    "setup:amplify": "./scripts/setup-amplify-deployment.sh",
     "config:frontend": "cd frontend && ./scripts/configure.sh",
     "config:amplify": "./scripts/update-amplify-env.sh",
     "dev:frontend": "cd frontend && npm run dev",

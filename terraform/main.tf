@@ -124,3 +124,31 @@ module "s3" {
   project_name               = var.project_name
   environment                = var.environment
 }
+
+# AWS Amplify Frontend Deployment
+module "amplify" {
+  source = "./modules/amplify"
+  count  = var.enable_amplify_deployment ? 1 : 0
+
+  app_name              = "${local.name_prefix}-frontend"
+  environment           = var.environment
+  repository_url        = var.github_repository_url
+  github_secret_name    = var.github_secret_name
+  main_branch_name      = var.github_main_branch
+  dev_branch_name       = var.github_dev_branch
+  cognito_user_pool_id  = module.cognito.user_pool_id
+  cognito_client_id     = module.cognito.user_pool_client_id
+  appsync_url           = module.appsync.graphql_endpoint
+  aws_region            = var.aws_region
+  s3_bucket_name        = module.s3.bucket_name
+  enable_auto_build     = var.amplify_enable_auto_build
+  enable_pr_preview     = var.amplify_enable_pr_preview
+  enable_webhook        = var.amplify_enable_webhook
+  custom_domain         = var.amplify_custom_domain
+
+  tags = {
+    Project     = var.project_name
+    Environment = var.environment
+    ManagedBy   = "Terraform"
+  }
+}
