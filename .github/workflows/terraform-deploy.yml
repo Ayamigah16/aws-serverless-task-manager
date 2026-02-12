@@ -64,6 +64,17 @@ jobs:
         aws-region: ${{ env.AWS_REGION }}
         role-session-name: GitHubActions-Terraform
 
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18.x'
+
+    - name: Build Lambda Functions
+      run: |
+        echo "Building all Lambda functions before Terraform..."
+        bash scripts/build-lambdas.sh
+        echo "✓ Lambda functions built successfully"
+
     - name: Terraform Format Check
       id: fmt
       run: terraform fmt -check -recursive

@@ -88,9 +88,8 @@ deploy_frontend() {
 
     # Get infrastructure outputs for frontend config
     log_info "Retrieving infrastructure outputs"
-    
-    local api_url cognito_pool_id cognito_client_id appsync_url aws_region
-    api_url=$(get_terraform_output "api_gateway_url") || die "Failed to get API URL"
+
+    local cognito_pool_id cognito_client_id appsync_url aws_region
     cognito_pool_id=$(get_terraform_output "cognito_user_pool_id") || die "Failed to get Cognito Pool ID"
     cognito_client_id=$(get_terraform_output "cognito_user_pool_client_id") || die "Failed to get Cognito Client ID"
     appsync_url=$(get_terraform_output "appsync_graphql_url") || die "Failed to get AppSync URL"
@@ -99,7 +98,7 @@ deploy_frontend() {
     # Create frontend config
     log_info "Creating frontend configuration"
     cat > "${FRONTEND_DIR}/.env.production" << EOF
-NEXT_PUBLIC_API_URL=${api_url}
+NEXT_PUBLIC_API_URL=${appsync_url}
 NEXT_PUBLIC_COGNITO_USER_POOL_ID=${cognito_pool_id}
 NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID=${cognito_client_id}
 NEXT_PUBLIC_APPSYNC_URL=${appsync_url}
@@ -114,17 +113,13 @@ EOF
 run_smoke_tests() {
     log_info "Running smoke tests"
 
-    # Test API Gateway
-    local api_url
-    api_url=$(get_terraform_output "api_gateway_url" 2>/dev/null)
-    
-    if [ -n "${api_url}" ]; then
-        log_info "Testing API Gateway endpoint"
-        if curl -sf "${api_url}/health" &>/dev/null; then
-            log_success "API Gateway is responding"
-        else
-            log_warn "API Gateway health check failed (may not have health endpoint)"
-        fi
+    # Test AppSync endpoint
+    local appsync_url
+    appsync_url=$(get_terraform_output "appsync_graphql_url" 2>/dev/null)
+
+    if [ -n "${appsync_url}" ]; then
+        log_info "AppSync endpoint configured: ${appsync_url}"
+        log_success "AppSync is deployed"
     fi
 
     log_success "Smoke tests completed"
@@ -140,14 +135,12 @@ show_deployment_summary() {
 
     if [ "${DEPLOY_INFRASTRUCTURE}" = "true" ]; then
         echo "Infrastructure & Lambda Functions:"
-        local api_url cognito_pool_id appsync_url
-        api_url=$(get_terraform_output "api_gateway_url" 2>/dev/null) || api_url="N/A"
+        local cognito_pool_id appsync_url
         cognito_pool_id=$(get_terraform_output "cognito_user_pool_id" 2>/dev/null) || cognito_pool_id="N/A"
         appsync_url=$(get_terraform_output "appsync_graphql_url" 2>/dev/null) || appsync_url="N/A"
 
-        echo "  API Gateway:    ${api_url}"
-        echo "  AppSync:        ${appsync_url}"
-        echo "  Cognito Pool:   ${cognito_pool_id}"
+        echo "  AppSync GraphQL: ${appsync_url}"
+        echo "  Cognito Pool:    ${cognito_pool_id}"
         echo "  Lambda Functions: All deployed via Terraform"
         echo ""
     fi

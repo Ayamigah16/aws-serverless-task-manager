@@ -2,27 +2,10 @@
 # BUILD AUTOMATION
 # ============================================================================
 
-# Build Lambda functions and layer before deployment
-resource "null_resource" "build_lambdas" {
-  triggers = {
-    # Rebuild when any Lambda source changes
-    pre_signup_trigger   = filesha256("${path.module}/../../../lambda/pre-signup-trigger/index.js")
-    task_api             = filesha256("${path.module}/../../../lambda/task-api/index.js")
-    users_api            = filesha256("${path.module}/../../../lambda/users-api/index.js")
-    notification_handler = filesha256("${path.module}/../../../lambda/notification-handler/index.js")
-    appsync_resolver     = filesha256("${path.module}/../../../lambda/appsync-resolver/index.js")
-    stream_processor     = filesha256("${path.module}/../../../lambda/stream-processor/index.js")
-    file_processor       = filesha256("${path.module}/../../../lambda/file-processor/index.js")
-    presigned_url        = filesha256("${path.module}/../../../lambda/presigned-url/index.js")
-    github_webhook       = filesha256("${path.module}/../../../lambda/github-webhook/index.js")
-    build_script         = filesha256("${path.module}/../../../scripts/build-lambdas.sh")
-  }
-
-  provisioner "local-exec" {
-    command     = "bash ${path.module}/../../../scripts/build-lambdas.sh"
-    working_dir = path.module
-  }
-}
+# Note: Lambda functions are pre-built by deploy.sh script before Terraform runs.
+# This ensures packages exist before Terraform computes hashes.
+# The null_resource build automation has been removed to avoid hash inconsistencies
+# between plan and apply phases.
 
 # ============================================================================
 # SHARED LAMBDA LAYER
@@ -35,8 +18,6 @@ resource "aws_lambda_layer_version" "shared" {
   compatible_runtimes = [var.runtime]
   description         = "Shared utilities for Lambda functions"
   source_code_hash    = filebase64sha256("${path.module}/../../../lambda/layers/shared-layer.zip")
-
-  depends_on = [null_resource.build_lambdas]
 }
 
 # Pre Sign-Up Lambda
@@ -92,8 +73,6 @@ resource "aws_lambda_function" "pre_signup" {
       SNS_TOPIC_ARN   = var.sns_topic_arn
     }
   }
-
-  depends_on = [null_resource.build_lambdas]
 
   tracing_config {
     mode = "Active"
@@ -190,8 +169,6 @@ resource "aws_lambda_function" "task_api" {
   tracing_config {
     mode = "Active"
   }
-
-  depends_on = [null_resource.build_lambdas]
 }
 
 # Notification Handler Lambda
@@ -279,7 +256,6 @@ resource "aws_lambda_function" "notification_handler" {
     mode = "Active"
   }
 
-  depends_on = [null_resource.build_lambdas]
 }
 
 # CloudWatch Log Groups
@@ -386,7 +362,6 @@ resource "aws_lambda_function" "appsync_resolver" {
     mode = "Active"
   }
 
-  depends_on = [null_resource.build_lambdas]
 }
 
 # ============================================================================
@@ -462,7 +437,6 @@ resource "aws_lambda_function" "users_api" {
     mode = "Active"
   }
 
-  depends_on = [null_resource.build_lambdas]
 }
 
 resource "aws_cloudwatch_log_group" "users_api" {
@@ -495,33 +469,37 @@ resource "aws_iam_role_policy" "stream_processor" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Action = [
-          "dynamodb:DescribeStream",
-          "dynamodb:GetRecords",
-          "dynamodb:GetShardIterator",
-          "dynamodb:ListStreams"
-        ]
-        Resource = "${var.dynamodb_table_arn}/stream/*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "aoss:*"
-        ]
-        Resource = var.opensearch_collection_arn
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "xray:PutTraceSegments",
-          "xray:PutTelemetryRecords"
-        ]
-        Resource = "*"
-      }
-    ]
+    Statement = concat(
+      [
+        {
+          Effect = "Allow"
+          Action = [
+            "dynamodb:DescribeStream",
+            "dynamodb:GetRecords",
+            "dynamodb:GetShardIterator",
+            "dynamodb:ListStreams"
+          ]
+          Resource = "${var.dynamodb_table_arn}/stream/*"
+        },
+        {
+          Effect = "Allow"
+          Action = [
+            "xray:PutTraceSegments",
+            "xray:PutTelemetryRecords"
+          ]
+          Resource = "*"
+        }
+      ],
+      var.opensearch_collection_arn != "" ? [
+        {
+          Effect = "Allow"
+          Action = [
+            "aoss:*"
+          ]
+          Resource = var.opensearch_collection_arn
+        }
+      ] : []
+    )
   })
 }
 
@@ -544,7 +522,6 @@ resource "aws_lambda_function" "stream_processor" {
   environment {
     variables = {
       OPENSEARCH_ENDPOINT = var.opensearch_endpoint
-      AWS_REGION          = var.aws_region
     }
   }
 
@@ -552,7 +529,6 @@ resource "aws_lambda_function" "stream_processor" {
     mode = "Active"
   }
 
-  depends_on = [null_resource.build_lambdas]
 }
 
 resource "aws_cloudwatch_log_group" "stream_processor" {
@@ -639,7 +615,6 @@ resource "aws_lambda_function" "file_processor" {
     mode = "Active"
   }
 
-  depends_on = [null_resource.build_lambdas]
 }
 
 resource "aws_cloudwatch_log_group" "file_processor" {
@@ -719,7 +694,6 @@ resource "aws_lambda_function" "presigned_url" {
     mode = "Active"
   }
 
-  depends_on = [null_resource.build_lambdas]
 }
 
 resource "aws_cloudwatch_log_group" "presigned_url" {
@@ -808,7 +782,6 @@ resource "aws_lambda_function" "github_webhook" {
     mode = "Active"
   }
 
-  depends_on = [null_resource.build_lambdas]
 }
 
 resource "aws_cloudwatch_log_group" "github_webhook" {

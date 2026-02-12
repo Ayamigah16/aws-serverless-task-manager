@@ -176,12 +176,12 @@ jobs:
 
     - name: Run smoke tests
       run: |
-        # Test API Gateway
-        API_URL=$(aws apigateway get-rest-apis --query "items[?name=='task-manager-${{ needs.prepare.outputs.environment }}'].id" --output text)
-        if [ -n "$API_URL" ]; then
-          echo "✓ API Gateway found: $API_URL"
+        # Test AppSync GraphQL API
+        APPSYNC_API=$(aws appsync list-graphql-apis --query "graphqlApis[?starts_with(name, 'task-manager-${{ needs.prepare.outputs.environment }}')].apiId" --output text | head -1)
+        if [ -n "$APPSYNC_API" ]; then
+          echo "✓ AppSync GraphQL API found: $APPSYNC_API"
         else
-          echo "✗ API Gateway not found"
+          echo "✗ AppSync GraphQL API not found"
           exit 1
         fi
 
