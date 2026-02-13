@@ -7,7 +7,8 @@ type Task {
   projectId: ID
   sprintId: ID
   assignees: [User!]
-  reporter: User!
+  reporter: User
+  createdBy: ID
   createdAt: AWSDateTime!
   updatedAt: AWSDateTime!
   dueDate: AWSDateTime
