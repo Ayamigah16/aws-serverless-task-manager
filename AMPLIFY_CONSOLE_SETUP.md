@@ -2,6 +2,24 @@
 
 This guide covers manual setup of AWS Amplify Hosting for the task manager frontend with Next.js SSR support in a monorepo structure.
 
+## ⚠️ CRITICAL: Monorepo Configuration Required
+
+**The #1 deployment issue is missing the monorepo folder setting!**
+
+During Amplify app creation, you MUST:
+1. Check the box: ☑ **"Connecting a monorepo? Pick a folder"**
+2. Set folder to: **`frontend`**
+
+**If you skip this:**
+- ❌ Framework detection fails
+- ❌ App uses static hosting (AmazonS3) instead of SSR
+- ❌ HTTP 404 errors on all routes
+- ❌ Build warnings: "No index.html detected"
+
+**You cannot fix this after creation** - you must delete and recreate the app.
+
+---
+
 ## Why Manual Console Setup?
 
 Terraform's AWS Amplify provider has limitations:
@@ -64,14 +82,27 @@ Note these values:
 1. **Select Repository**
    - Repository: `Ayamigah16/aws-serverless-task-manager`
    - Branch: **main**
-   - Check ☑ **"Connecting a monorepo? Pick a folder"**
+   - ⚠️ **CRITICAL**: Check ☑ **"Connecting a monorepo? Pick a folder"**
    - Monorepo folder: **frontend**
    - Click **"Next"**
 
-2. **Important: App root configuration**
+2. **⚠️ VERIFY THIS SETTING ⚠️**
+   
+   **If you missed the monorepo checkbox during initial setup:**
+   - Amplify will deploy from repo root (wrong!)
+   - Framework detection will fail
+   - App will be treated as static site (AmazonS3)
+   - **FIX**: Delete the app and recreate it with monorepo folder set
+   
+   **How to check if it's configured correctly:**
+   - Go to: **App settings** → **General**
+   - Look for **"App root"** or **"Repository"** section
+   - Should show: `frontend` as the app root directory
+   - If it shows `/` or empty → You need to recreate the app
+   
    The monorepo folder setting (`frontend`) is CRITICAL for:
    - Next.js framework detection
-   - SSR runtime selection
+   - SSR runtime selection (not static S3)
    - Correct build artifact location
 
 ---
@@ -81,9 +112,10 @@ Note these values:
 1. **App name**
    - Enter: `task-manager-frontend`
 
-2 **Build and test settings**
+2. **Build and test settings**
    - Amplify should auto-detect **Next.js - SSR**
    - ✅ Verify it shows: "Next.js - SSR" (NOT "Next.js - Static")
+   - ⚠️ If it shows wrong framework: Stop and go back to Step 2 - monorepo not configured!
 
 3. **Build spec (amplify.yml)**
    - Keep the **existing amplify.yml** in your repository root
@@ -91,6 +123,37 @@ Note these values:
    - ✅ Already configured with `baseDirectory: frontend`
 
 4. **Click "Advanced settings"**
+
+---
+
+## ✅ Checkpoint: Verify Configuration
+
+Before continuing, verify these critical settings:
+
+**Check 1: App Root**
+- Go to: **App settings** → **General** → **Repository** section
+- Should show: App root = `frontend`
+- ❌ If empty or `/`: DELETE app, restart from Step 1 with monorepo checkbox
+
+**Check 2: Framework Detection**
+- Go to: **App settings** → **Build settings**
+- Should show: Framework = **"Next.js - SSR"** or **"Next.js SSR"**
+- ❌ If it shows "Next.js", "Web", or anything else: Wrong detection, recreate app
+
+**Check 3: First Build**
+- Wait for initial build to complete (~5 mins)
+- Check build log for: `Build image: public.ecr.aws/docker/library/node:20`
+- Should NOT see: "No index.html detected" warning
+- If you see that warning → SSR not working, recreate app
+
+**Test HTTP Response:**
+```bash
+curl -I https://main.YOUR_APP_ID.amplifyapp.com
+```
+- ✅ Good: `server: CloudFront` or no server header
+- ❌ Bad: `server: AmazonS3` → Static hosting, recreate app
+
+If all checks pass, continue to Step 4. If any fail, delete and recreate the app with proper monorepo configuration.
 
 ---
 
@@ -137,13 +200,24 @@ Add these environment variables (CRITICAL for app functionality):
 
 After deployment completes:
 
-1. **Set Branch to Production Stage**
+1. **Set Branch to Production Stage** *(Optional - improves caching)*
+   
+   The branch stage setting location varies by AWS Console version. Try these locations:
+   
+   **Option A: Via Hosting Environments**
+   - Go to: **Hosting environments** (left sidebar)
+   - Click on your **main** branch
+   - Look for **"Branch details"** or **"Settings"** button
+   - Set Stage to **Production**
+   - Enable **performance mode** if available
+   
+   **Option B: Via App Settings**
    - Go to: **App settings** → **General**
-   - Click **"Edit"** next to Branch settings
-   - For **main** branch:
-     - Stage: **Production**
-     - ☑ Enable performance mode
-   - Click **"Save"**
+   - Scroll to **"Branches"** or **"Branch settings"** section
+   - Click **"Edit"** or **"Manage"**
+   - For **main** branch: Set Stage to **Production**
+   
+   **Note**: If you can't find this setting, it's okay - your app will still work correctly. Production stage mainly optimizes CDN caching and is not required for functionality.
 
 2. **Update Cognito Callback URLs**
    
@@ -260,16 +334,43 @@ After deployment completes:
 **Symptoms:**
 - HTTP header shows: `server: AmazonS3`
 - Page returns 404 for routes
+- Build log warning: "No index.html detected in deploy folder"
 
-**Fix:**
-1. Check Framework Detection:
-   - Go to: **App settings** → **Build settings**
-   - Should show: **Next.js - SSR** (NOT "Next.js")
-2. If wrong framework:
-   - Delete and recreate app
-   - Ensure "Monorepo" is set during initial setup
-3. Check `next.config.js`:
-   - Should NOT have `output: 'standalone'` or `output: 'export'`
+**Root Cause:**
+- Amplify is deploying from repository root instead of `frontend/` subdirectory
+- Framework detection fails when Next.js app is not in repo root
+- Without proper detection, Amplify treats it as static files
+
+**How to Check:**
+1. Go to: **App settings** → **General**
+2. Look for **"Repository"** or **"App root"** section
+3. Should show app root: `frontend`
+4. If it shows `/` or is empty → Monorepo setting was not configured
+
+**Fix (Required):**
+1. **Delete Current App:**
+   - In Amplify Console, go to your app
+   - **App settings** → **General** → Scroll down
+   - Click **"Delete app"** (confirm deletion)
+
+2. **Recreate App with Monorepo Setting:**
+   - Start fresh deployment from Step 1
+   - ⚠️ **CRITICAL**: During Step 2, check the box:
+     ☑ **"Connecting a monorepo? Pick a folder"**
+   - Set folder: **frontend**
+   - This enables proper Next.js SSR detection
+
+**Alternative (If Available):**
+- Some AWS Console versions allow editing app root after creation:
+  - **App settings** → **General** → **Edit** (near Repository section)
+  - Update app root to: `frontend`
+  - Save and redeploy
+- If this option is not available, you MUST delete and recreate
+
+**After Recreation:**
+- Framework should auto-detect as **"Next.js - SSR"**
+- HTTP response will show proper CloudFront headers (not AmazonS3)
+- Routes will work correctly
 
 ---
 
