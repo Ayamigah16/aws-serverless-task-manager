@@ -1,16 +1,17 @@
 # ============================================================================
-# SECRETS MANAGER - GITHUB TOKEN REFERENCE
+# GITHUB INTEGRATION
 # ============================================================================
-# Secret must be created externally using scripts/create-github-secret.sh
-# This keeps the token completely out of Terraform state and files
-
-data "aws_secretsmanager_secret" "github_token" {
-  name = var.github_secret_name
-}
-
-data "aws_secretsmanager_secret_version" "github_token" {
-  secret_id = data.aws_secretsmanager_secret.github_token.id
-}
+# SECURITY NOTE: GitHub token should be configured via AWS Console or CLI
+# using GitHub App integration, NOT via Terraform access_token parameter.
+# Using access_token stores the token in Terraform state (security risk).
+#
+# To connect repository:
+#   1. Go to Amplify Console → App Settings → General → Edit
+#   2. Connect via GitHub App (OAuth)
+#   OR
+#   3. Use AWS CLI: aws amplify update-app --app-id <id> --access-token <token>
+#
+# If you must use Secrets Manager for initial setup, configure outside Terraform.
 
 # ============================================================================
 # AWS AMPLIFY APP FOR FRONTEND DEPLOYMENT
@@ -20,15 +21,17 @@ resource "aws_amplify_app" "frontend" {
   name        = var.app_name
   repository  = var.repository_url
   description = "Task Manager Frontend Application"
-  platform    = "WEB_COMPUTE"
+  platform    = "WEB"
 
-  # OAuth token for GitHub/GitLab/Bitbucket - reads from Secrets Manager
-  access_token = data.aws_secretsmanager_secret_version.github_token.secret_string
+  # NOTE: app_root configuration for monorepo SSR detection must be set via:
+  # 1. AWS Console: App Settings → General → Edit → Monorepo settings
+  # 2. AWS CLI: aws amplify update-app --app-id <id> --app-root frontend
+  # Terraform aws_amplify_app doesn't support app_root parameter yet.
 
   # Build settings from amplify.yml in repo root
   build_spec = file("${path.root}/../amplify.yml")
 
-  # Environment variables for Next.js
+  # Environment variables for Next.js runtime
   environment_variables = {
     NEXT_PUBLIC_COGNITO_USER_POOL_ID        = var.cognito_user_pool_id
     NEXT_PUBLIC_COGNITO_USER_POOL_CLIENT_ID = var.cognito_client_id
@@ -36,11 +39,6 @@ resource "aws_amplify_app" "frontend" {
     NEXT_PUBLIC_API_URL                     = var.appsync_url
     NEXT_PUBLIC_AWS_REGION                  = var.aws_region
     NEXT_PUBLIC_S3_BUCKET                   = var.s3_bucket_name
-    _LIVE_UPDATES                           = jsonencode([{
-      pkg     = "@aws-amplify/cli"
-      type    = "npm"
-      version = "latest"
-    }])
   }
 
   # Enable auto branch creation for feature branches
@@ -50,6 +48,13 @@ resource "aws_amplify_app" "frontend" {
 
   # IAM service role for Amplify
   iam_service_role_arn = aws_iam_role.amplify.arn
+
+  # Lifecycle rule to ignore access_token changes
+  # This prevents Terraform from trying to manage the GitHub connection
+  # after initial setup. Manage via AWS Console or CLI instead.
+  lifecycle {
+    ignore_changes = [access_token]
+  }
 
   tags = merge(
     var.tags,
@@ -69,6 +74,9 @@ resource "aws_amplify_branch" "main" {
   # Default to PRODUCTION for main branch accessibility
   # Use BETA for staging, DEVELOPMENT only for feature branches
   stage = var.environment == "staging" ? "BETA" : "PRODUCTION"
+
+  # Enable performance optimizations for production SSR
+  enable_performance_mode = var.environment == "staging" ? false : true
 
   enable_auto_build           = true
   enable_pull_request_preview = var.enable_pr_preview
@@ -143,6 +151,8 @@ resource "aws_iam_role_policy" "amplify" {
   name = "${var.app_name}-amplify-policy"
   role = aws_iam_role.amplify.id
 
+  # Minimal permissions for Amplify Hosting (CloudWatch Logs only)
+  # Amplify service handles build/deploy internally - no need for amplify:* permissions
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -154,13 +164,6 @@ resource "aws_iam_role_policy" "amplify" {
           "logs:PutLogEvents"
         ]
         Resource = "arn:aws:logs:*:*:*"
-      },
-      {
-        Effect = "Allow"
-        Action = [
-          "amplify:*"
-        ]
-        Resource = "*"
       }
     ]
   })

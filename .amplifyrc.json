@@ -1,9 +1,0 @@
-{
-  "providers": {
-    "awscloudformation": {}
-  },
-  "frontend": {
-    "framework": "nextjs-ssr",
-    "baseDirectory": "frontend"
-  }
-}

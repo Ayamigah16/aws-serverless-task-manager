@@ -1,0 +1,43 @@
+{
+    "app": {
+        "appId": "d1ubq5barggroh",
+        "appArn": "arn:aws:amplify:eu-west-1:414392949441:apps/d1ubq5barggroh",
+        "name": "task-manager-sandbox-frontend",
+        "tags": {
+            "Project": "task-manager",
+            "Environment": "sandbox",
+            "Owner": "devops-team",
+            "ManagedBy": "Terraform",
+            "CostCenter": "engineering",
+            "Application": "TaskManager"
+        },
+        "description": "Task Manager Frontend Application",
+        "repository": "https://github.com/Ayamigah16/aws-serverless-task-manager",
+        "platform": "WEB",
+        "createTime": "2026-02-12T23:24:38.457000+00:00",
+        "updateTime": "2026-02-13T08:23:38.341000+00:00",
+        "iamServiceRoleArn": "arn:aws:iam::414392949441:role/task-manager-sandbox-frontend-amplify-role",
+        "environmentVariables": {
+            "NEXT_PUBLIC_APPSYNC_ENDPOINT": "https://5fjbcujvabdvxbcxfhjaffond4.appsync-api.eu-west-1.amazonaws.com/graphql",
+            "NEXT_PUBLIC_AWS_REGION": "eu-west-1",
+            "NEXT_PUBLIC_COGNITO_USER_POOL_ID": "eu-west-1_UE7DtSgWR",
+            "NEXT_PUBLIC_USER_POOL_CLIENT_ID": "okh3pgk9j011v7sq9nk6gicet"
+        },
+        "defaultDomain": "d1ubq5barggroh.amplifyapp.com",
+        "enableBranchAutoBuild": true,
+        "enableBranchAutoDeletion": true,
+        "enableBasicAuth": false,
+        "customRules": [],
+        "buildSpec": "version: 1\nfrontend:\n  phases:\n    preBuild:\n      commands:\n      - cd frontend\n      - nvm use 20 || nvm install 20\n      - npm ci --legacy-peer-deps\n      - node --version\n      - npm --version\n\n    build:\n      commands:\n      - |\n        required_vars=(\n          NEXT_PUBLIC_COGNITO_USER_POOL_ID\n        )\n        for var in \"${required_vars[@]}\"; do\n          if [ -z \"${!var}\" ]; then\n            echo \"ERROR: $var is not set\"\n            exit 1\n          fi\n        done\n      - npm run build\n\n    postBuild:\n      commands:\n      - du -sh .next\n\n  artifacts:\n    baseDirectory: frontend\n    files:\n    - '**/*'\n\n  cache:\n    paths:\n    - frontend/node_modules/**/*\n    - frontend/.next/cache/**/*\n\n  customHeaders:\n  - pattern: '**/*'\n    headers:\n    - key: Strict-Transport-Security\n      value: max-age=31536000; includeSubDomains; preload\n    - key: X-Frame-Options\n      value: SAMEORIGIN\n    - key: X-Content-Type-Options\n      value: nosniff\n    - key: Referrer-Policy\n      value: strict-origin-when-cross-origin\n    - key: Permissions-Policy\n      value: camera=(), microphone=(), geolocation=()\n",
+        "customHeaders": "",
+        "enableAutoBranchCreation": false,
+        "repositoryCloneMethod": "TOKEN",
+        "cacheConfig": {
+            "type": "AMPLIFY_MANAGED_NO_COOKIES"
+        },
+        "webhookCreateTime": "2026-02-12T23:57:03.382000+00:00",
+        "jobConfig": {
+            "buildComputeType": "STANDARD_8GB"
+        }
+    }
+}

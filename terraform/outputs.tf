@@ -71,13 +71,3 @@ output "amplify_custom_domain_url" {
   description = "Amplify custom domain URL (if configured)"
   value       = var.enable_amplify_deployment ? module.amplify[0].custom_domain_url : ""
 }
-
-output "github_token_secret_name" {
-  description = "Name of Secrets Manager secret storing GitHub token"
-  value       = var.enable_amplify_deployment ? module.amplify[0].github_token_secret_name : ""
-}
-
-output "github_token_secret_arn" {
-  description = "ARN of GitHub token secret in Secrets Manager"
-  value       = var.enable_amplify_deployment ? module.amplify[0].github_token_secret_arn : ""
-}
