@@ -20,7 +20,7 @@ resource "aws_amplify_app" "frontend" {
   name        = var.app_name
   repository  = var.repository_url
   description = "Task Manager Frontend Application"
-  platform    = "WEB"
+  platform    = "WEB_COMPUTE"
 
   # OAuth token for GitHub/GitLab/Bitbucket - reads from Secrets Manager
   access_token = data.aws_secretsmanager_secret_version.github_token.secret_string
@@ -69,7 +69,7 @@ resource "aws_amplify_branch" "main" {
   # Default to PRODUCTION for main branch accessibility
   # Use BETA for staging, DEVELOPMENT only for feature branches
   stage = var.environment == "staging" ? "BETA" : "PRODUCTION"
-  
+
   enable_auto_build           = true
   enable_pull_request_preview = var.enable_pr_preview
 
