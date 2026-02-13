@@ -146,6 +146,15 @@ module "amplify" {
   enable_webhook        = var.amplify_enable_webhook
   custom_domain         = var.amplify_custom_domain
 
+  # Explicit dependencies to ensure backend is ready before frontend deployment
+  depends_on = [
+    module.cognito,
+    module.appsync,
+    module.s3,
+    module.lambda,
+    module.dynamodb
+  ]
+
   tags = {
     Project     = var.project_name
     Environment = var.environment

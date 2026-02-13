@@ -66,9 +66,10 @@ resource "aws_amplify_branch" "main" {
   app_id      = aws_amplify_app.frontend.id
   branch_name = var.main_branch_name
 
-  stage = var.environment == "production" ? "PRODUCTION" : (
-    var.environment == "staging" ? "BETA" : "DEVELOPMENT"
-  )
+  # Default to PRODUCTION for main branch accessibility
+  # Use BETA for staging, DEVELOPMENT only for feature branches
+  stage = var.environment == "staging" ? "BETA" : "PRODUCTION"
+  
   enable_auto_build           = true
   enable_pull_request_preview = var.enable_pr_preview
 

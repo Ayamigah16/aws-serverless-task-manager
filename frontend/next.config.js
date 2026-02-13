@@ -46,9 +46,6 @@ const nextConfig = {
     }
     return config
   },
-
-  // Output standalone for better deployment
-  output: 'standalone',
 }
 
 module.exports = nextConfig
