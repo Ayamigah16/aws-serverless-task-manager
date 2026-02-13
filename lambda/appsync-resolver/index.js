@@ -74,28 +74,28 @@ async function listUsers(isAdmin) {
 
   const { CognitoIdentityProviderClient, ListUsersCommand, AdminListGroupsForUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
   const cognito = new CognitoIdentityProviderClient({ region: process.env.REGION });
-  
+
   const listCommand = new ListUsersCommand({
     UserPoolId: process.env.USER_POOL_ID,
     Limit: 60
   });
-  
+
   const response = await cognito.send(listCommand);
-  
+
   const users = await Promise.all(response.Users.map(async (user) => {
     const groupsCommand = new AdminListGroupsForUserCommand({
       UserPoolId: process.env.USER_POOL_ID,
       Username: user.Username
     });
-    
+
     const groupsResponse = await cognito.send(groupsCommand);
     const groups = groupsResponse.Groups.map(g => g.GroupName);
-    
+
     const attributes = {};
     user.Attributes.forEach(attr => {
       attributes[attr.Name] = attr.Value;
     });
-    
+
     return {
       userId: attributes.sub,
       email: attributes.email,
@@ -104,7 +104,7 @@ async function listUsers(isAdmin) {
       enabled: user.Enabled
     };
   }));
-  
+
   return users.filter(u => u.enabled);
 }
 
@@ -128,7 +128,65 @@ async function getTask(taskId, userId, isAdmin) {
     }
   }
 
-  return task.Item;
+  // Enrich task with assignees
+  return await enrichTaskWithAssignees(task.Item);
+}
+
+// Helper function to get task assignees
+async function getTaskAssignees(taskId) {
+  const result = await ddb.send(new QueryCommand({
+    TableName: TABLE_NAME,
+    KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+    ExpressionAttributeValues: {
+      ':pk': `TASK#${taskId}`,
+      ':sk': `ASSIGNMENT#`
+    }
+  }));
+
+  if (!result.Items || result.Items.length === 0) {
+    return [];
+  }
+
+  // Get user details from Cognito
+  const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
+  const cognito = new CognitoIdentityProviderClient({ region: process.env.REGION });
+
+  const assignees = await Promise.all(
+    result.Items.map(async (assignment) => {
+      try {
+        const userCommand = new AdminGetUserCommand({
+          UserPoolId: process.env.USER_POOL_ID,
+          Username: assignment.userId
+        });
+        const userResponse = await cognito.send(userCommand);
+        const attributes = userResponse.UserAttributes.reduce((acc, attr) => {
+          acc[attr.Name] = attr.Value;
+          return acc;
+        }, {});
+
+        return {
+          userId: assignment.userId,
+          email: attributes.email,
+          name: attributes.name || attributes.email,
+          enabled: userResponse.Enabled
+        };
+      } catch (err) {
+        console.error(`Failed to get user ${assignment.userId}:`, err);
+        return null;
+      }
+    })
+  );
+
+  return assignees.filter(a => a !== null);
+}
+
+// Enrich task with assignees array
+async function enrichTaskWithAssignees(task) {
+  const assignees = await getTaskAssignees(task.taskId);
+  return {
+    ...task,
+    assignees
+  };
 }
 
 async function createTask(input, userId, isAdmin) {
@@ -267,14 +325,14 @@ async function assignTask(input, userId, isAdmin) {
 
   const { CognitoIdentityProviderClient, AdminGetUserCommand } = require('@aws-sdk/client-cognito-identity-provider');
   const cognito = new CognitoIdentityProviderClient({ region: process.env.REGION });
-  
+
   try {
     const userCommand = new AdminGetUserCommand({
       UserPoolId: process.env.USER_POOL_ID,
       Username: assigneeId
     });
     const userResponse = await cognito.send(userCommand);
-    
+
     if (!userResponse.Enabled) {
       throw new Error('Cannot assign tasks to deactivated users');
     }
@@ -310,7 +368,8 @@ async function assignTask(input, userId, isAdmin) {
     assignedBy: userId
   });
 
-  return task.Item;
+  // Return enriched task with assignees
+  return await enrichTaskWithAssignees(task.Item);
 }
 
 async function listTasks(args, userId, isAdmin) {
