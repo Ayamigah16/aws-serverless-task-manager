@@ -1,52 +1,53 @@
 version: 1
-frontend:
-  phases:
-    preBuild:
-      commands:
-      - cd frontend
-      - nvm use 20 || nvm install 20
-      - npm ci --legacy-peer-deps
-      - node --version
-      - npm --version
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+          - nvm use 20 || nvm install 20
+          - npm ci --legacy-peer-deps
+          - node --version
+          - npm --version
 
-    build:
-      commands:
-      - |
-        required_vars=(
-          NEXT_PUBLIC_COGNITO_USER_POOL_ID
-        )
-        for var in "${required_vars[@]}"; do
-          if [ -z "${!var}" ]; then
-            echo "ERROR: $var is not set"
-            exit 1
-          fi
-        done
-      - npm run build
+        build:
+          commands:
+          - |
+            required_vars=(
+              NEXT_PUBLIC_COGNITO_USER_POOL_ID
+            )
+            for var in "${required_vars[@]}"; do
+              if [ -z "${!var}" ]; then
+                echo "ERROR: $var is not set"
+                exit 1
+              fi
+            done
+          - npm run build
 
-    postBuild:
-      commands:
-      - du -sh .next
+        postBuild:
+          commands:
+          - du -sh .next
 
-  artifacts:
-    baseDirectory: frontend
-    files:
-    - '**/*'
+      artifacts:
+        baseDirectory: .next
+        files:
+        - '**/*'
 
-  cache:
-    paths:
-    - frontend/node_modules/**/*
-    - frontend/.next/cache/**/*
+      cache:
+        paths:
+        - node_modules/**/*
+        - .next/cache/**/*
 
-  customHeaders:
-  - pattern: '**/*'
-    headers:
-    - key: Strict-Transport-Security
-      value: max-age=31536000; includeSubDomains; preload
-    - key: X-Frame-Options
-      value: SAMEORIGIN
-    - key: X-Content-Type-Options
-      value: nosniff
-    - key: Referrer-Policy
-      value: strict-origin-when-cross-origin
-    - key: Permissions-Policy
-      value: camera=(), microphone=(), geolocation=()
+      customHeaders:
+      - pattern: '**/*'
+        headers:
+        - key: Strict-Transport-Security
+          value: max-age=31536000; includeSubDomains; preload
+        - key: X-Frame-Options
+          value: SAMEORIGIN
+        - key: X-Content-Type-Options
+          value: nosniff
+        - key: Referrer-Policy
+          value: strict-origin-when-cross-origin
+        - key: Permissions-Policy
+          value: camera=(), microphone=(), geolocation=()
