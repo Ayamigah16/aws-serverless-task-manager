@@ -4,42 +4,37 @@ Production-grade task management system for software engineering teams built on 
 
 ## 🚀 Quick Start
 
-### Automated Deployment (Recommended)
+### Deployment Overview
+This project uses a **hybrid deployment approach**:
+- **Backend** (Terraform): Cognito, AppSync, Lambda, DynamoDB, S3, SNS, EventBridge
+- **Frontend** (AWS Amplify Console): Next.js app deployed manually via AWS Console
+
+### Backend Deployment
 
 ```bash
-# Full stack deployment (Infrastructure + Lambda Functions + Frontend)
-./scripts/deploy.sh --environment sandbox
-
-# Or use CI/CD (push to main/develop)
-git push origin main  # Deploys to production
-git push origin develop  # Deploys to staging
+# Deploy all backend infrastructure and Lambda functions
+cd terraform
+terraform init
+terraform apply
 ```
 
-### Component-Specific Deployment
+**Note**: Terraform automatically builds and deploys all Lambda functions. No separate Lambda deployment needed.
+
+### Frontend Deployment
+
+Frontend is deployed via AWS Amplify Console for optimal Next.js SSR support:
 
 ```bash
-# Infrastructure & Lambda functions (Terraform handles both)
-./scripts/deploy.sh --infrastructure-only
-
-# Frontend configuration only
-./scripts/deploy.sh --frontend-only
-
-# Quick deploy (skip pre-build, let Terraform handle it)
-./scripts/deploy.sh --skip-build
+# See comprehensive setup guide
+cat AMPLIFY_CONSOLE_SETUP.md
 ```
 
-### Manual Setup
+**Why not Terraform?**
+- Terraform Amplify provider lacks monorepo `app_root` support
+- Manual Console setup provides better Next.js SSR detection
+- Visual configuration and debugging capabilities
 
-```bash
-# 1. Deploy backend infrastructure & Lambda functions
-cd terraform && terraform init && terraform apply
-# Note: Terraform automatically builds and deploys all Lambda functions
-
-# 2. Configure frontend
-./setup-amplify.sh
-```
-
-**Note**: Lambda functions are now fully managed by Terraform. The deployment script automatically handles building and deploying all functions via `terraform apply`.
+See [AMPLIFY_CONSOLE_SETUP.md](AMPLIFY_CONSOLE_SETUP.md) for complete step-by-step instructions.
 
 ## 📋 Architecture
 
@@ -71,17 +66,16 @@ cd terraform && terraform init && terraform apply
 ## 📚 Documentation
 
 ### Getting Started
-- [Deployment Checklist](./DEPLOYMENT_CHECKLIST.md) - **Production deployment guide**
+- [**Amplify Console Setup**](./AMPLIFY_CONSOLE_SETUP.md) - **Frontend deployment guide (REQUIRED)**
+- [Deployment Checklist](./DEPLOYMENT_CHECKLIST.md) - Production deployment checklist
 - [Quick Start Guide](./docs/getting-started/README.md) - Complete setup walkthrough
 - [AWS Account Preparation](./docs/getting-started/AWS_ACCOUNT_PREPARATION.md) - Prerequisites
 - [Troubleshooting](./docs/getting-started/TROUBLESHOOTING.md) - Common issues
 
 ### Deployment & Operations
-- [Terraform Optimization](./TERRAFORM_OPTIMIZATION.md) - **Lambda deployment via Terraform**
-- [Automated Deployment](./scripts/deploy.sh) - One-command full stack deployment
+- [Terraform Backend](./terraform/README.md) - Backend infrastructure deployment
 - [CI/CD Pipeline](./docs/deployment/CI_CD_GUIDE.md) - GitHub Actions workflows
-- [Scripts Reference](./docs/development/SCRIPTS_REFERENCE.md) - All deployment scripts
-- [Deployment Guide](./docs/deployment/README.md) - Manual deployment procedures
+- [Scripts Reference](./docs/development/SCRIPTS_REFERENCE.md) - Utility scripts
 - [Secrets Configuration](./.github/SECRETS_TEMPLATE.md) - GitHub secrets setup
 
 ### Architecture & Development
